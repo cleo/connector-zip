@@ -117,6 +117,10 @@ public class LambdaReaderOutputStream extends OutputStream {
         return input;
     }
 
+    public int getBufferLength() {
+        return buffer.length;
+    }
+
     public class InputStream extends java.io.InputStream {
         @Override
         public int available() throws IOException {

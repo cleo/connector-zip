@@ -1,6 +1,6 @@
 package com.cleo.labs.connector.zip;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -81,8 +81,12 @@ public class TestZipDirectoryInputStream {
     @Test
     public void test() throws IOException {
         ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get("."), Deflater.NO_COMPRESSION);
+        long totalSize = zip.getTotalSize();
+        System.out.println("totalSize="+totalSize);
         Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
         assertTrue(ZIP.toFile().exists());
+        assertEquals(totalSize, ZIP.toFile().length());
+        assertEquals(totalSize, zip.getCurrentSize());
         Path sandbox = Paths.get(System.getProperty("user.home"), "Downloads", "sand");
         int i = 0;
         while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;

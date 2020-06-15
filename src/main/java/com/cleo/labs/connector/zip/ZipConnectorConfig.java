@@ -32,4 +32,12 @@ public class ZipConnectorConfig {
             }
         }
     }
+
+    public boolean getSimulateUnzip() {
+        try {
+            return schema.simulateUnzip.getValue(client);
+        } catch (ConnectorPropertyException e) {
+            return false;
+        }
+    }
 }

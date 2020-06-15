@@ -7,15 +7,22 @@ import java.nio.file.attribute.FileTime;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
+import com.cleo.connector.api.helper.Logger;
+import com.cleo.labs.util.zip.ZipDirectoryInputStream;
+
 /**
  * Zip file attribute views
  */
 public class ZipFileAttributes implements DosFileAttributes, DosFileAttributeView {
-    String zipFileName;
-    FileTime now = FileTime.from(new Date().getTime(), TimeUnit.MILLISECONDS);
+    private String zipFileName;
+    private ZipDirectoryInputStream zip;
+    private FileTime now = FileTime.from(new Date().getTime(), TimeUnit.MILLISECONDS);
+    private Logger logger;
 
-    public ZipFileAttributes(String zipFileName) throws IOException {
+    public ZipFileAttributes(String zipFileName, ZipDirectoryInputStream zip, Logger logger) throws IOException {
         this.zipFileName = zipFileName;
+        this.zip = zip;
+        this.logger = logger;
     }
 
     @Override
@@ -55,7 +62,12 @@ public class ZipFileAttributes implements DosFileAttributes, DosFileAttributeVie
 
     @Override
     public long size() {
-        return -1L;
+        try {
+            logger.debug("calculating ZIP size for "+zipFileName+(zip.isTotalSizeCalculatedYet() ? " (cached)" : " (newly)"));
+            return zip.getTotalSize();
+        } catch (IOException e) {
+            return -1L;
+        }
     }
 
     @Override

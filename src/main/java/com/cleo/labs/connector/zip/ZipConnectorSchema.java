@@ -11,6 +11,7 @@ import com.cleo.connector.api.annotations.Property;
 import com.cleo.connector.api.interfaces.IConnectorProperty;
 import com.cleo.connector.api.property.CommonProperties;
 import com.cleo.connector.api.property.CommonProperty;
+import com.cleo.connector.api.property.CommonPropertyGroups;
 import com.cleo.connector.api.property.PropertyBuilder;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
@@ -32,7 +33,7 @@ public class ZipConnectorSchema extends ConnectorConfig {
     public static final String NONE = "none";
 
     @Property
-    final public IConnectorProperty<String> compressionLevel = new PropertyBuilder<>("CompressionLevel",DEFAULT)
+    final public IConnectorProperty<String> compressionLevel = new PropertyBuilder<>("CompressionLevel", DEFAULT)
             .setAllowedInSetCommand(false)
             .setDescription("Compression level none (0), 1-9, or default compression.")
             .setPossibleValues(DEFAULT,NONE,"1","2","3","4","5","6","7","8","9")
@@ -43,6 +44,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
 
     @Property
     final IConnectorProperty<Boolean> enableDebug = CommonProperties.of(CommonProperty.EnableDebug);
+
+    @Property
+    final IConnectorProperty<Boolean> simulateUnzip = new PropertyBuilder<>("SimulateUnzip", false)
+            .setAllowedInSetCommand(false)
+            .setDescription("Log directories that would be created and files that would be "+
+                 "written during the Unzip process on PUT, but do no create them.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
 
     @Info
     protected static String info() throws IOException {

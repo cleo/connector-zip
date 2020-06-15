@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -20,13 +21,14 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private ZipInputStream unzip;
     private ZipEntry entry;
     private File entryFile;
-    private FileOutputStream fos;
+    private OutputStream os;
     private byte[] buffer;
     private boolean closed;
+    private UnZipProcessor processor;
 
     private static final int ENTRY_NEED = 512;
     private static final int BUFFER_SIZE = 8192;
-    private static final int BUFFER_NEED = BUFFER_SIZE;
+    private static final int BUFFER_NEED = 2*BUFFER_SIZE;
 
     public ZipDirectoryOutputStream(Path path) throws IOException {
         super(null);
@@ -37,10 +39,38 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         this.unzip = new ZipInputStream(input);
         this.entry = null;
         this.entryFile = null;
-        this.fos = null;
+        this.os = null;
         this.buffer = new byte[BUFFER_SIZE];
         this.closed = false;
         this.out = output;
+        this.processor = defaultProcessor;
+    }
+
+    public interface UnZipProcessor {
+        public OutputStream process(ZipEntry entry, File entryFile) throws IOException;
+    }
+
+    public static UnZipProcessor defaultProcessor = (e, ef) -> {
+        if (e.isDirectory()) {
+            ef.mkdirs();
+            return null;
+        } else {
+            File parent = new File(ef.getParent());
+            if (!parent.exists()) {
+                parent.mkdirs();
+            } else if (!parent.isDirectory()) {
+                throw new IOException("can not create parent directory for "+e.getName()+": file already exists");
+            }
+            return new FileOutputStream(ef);
+        }
+    };
+
+    public void setProcessor(UnZipProcessor processor) {
+        this.processor = processor;
+    }
+
+    public int getBufferLength() {
+        return output.getBufferLength();
     }
 
     @Override
@@ -59,17 +89,8 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 if (!entryFile.getCanonicalPath().startsWith(canonical)) {
                     throw new IOException("entry name resolves outside target path: "+entry.getName());
                 }
-                if (entry.isDirectory()) {
-                    entryFile.mkdirs();
-                    fos = null;
-                } else {
-                    File parent = new File(entryFile.getParent());
-                    if (!parent.exists()) {
-                        parent.mkdirs();
-                    } else if (!parent.isDirectory()) {
-                        throw new IOException("can not create parent directory for "+entry.getName()+": file already exists");
-                    }
-                    fos = new FileOutputStream(entryFile);
+                if (processor != null) {
+                    os = processor.process(entry, entryFile);
                 }
                 return BUFFER_NEED;
             }
@@ -82,15 +103,15 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 }
                 entry = null;
                 entryFile = null;
-                if (fos != null) {
-                    fos.flush();
-                    fos.close();
-                    fos = null;
+                if (os != null) {
+                    os.flush();
+                    os.close();
+                    os = null;
                 }
                 return ENTRY_NEED;
             } else {
-                if (fos != null) {
-                    fos.write(buffer, 0, n);
+                if (os != null) {
+                    os.write(buffer, 0, n);
                 }
                 return BUFFER_NEED;
             }
@@ -113,11 +134,11 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 exception = e;
             }
         }
-        if (fos != null) {
+        if (os != null) {
             try {
-                fos.flush();
-                fos.close();
-                fos = null;
+                os.flush();
+                os.close();
+                os = null;
             } catch (IOException e) {
                 exception = e;
             }

@@ -117,7 +117,18 @@ public class ZipConnectorClient extends ConnectorClient {
         path = validatePath(path);
 
         try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(path.getParent())) {
+            if (config.getSimulateUnzip()) {
+                unzip.setProcessor((e, ef) -> {
+                    if (e.isDirectory()) {
+                        logger.logDetail("mkdir "+e.getName(), 1);
+                    } else {
+                        logger.logDetail("file "+e.getName(), 1);
+                    }
+                    return null;
+                });
+            }
             transfer(source.getStream(), unzip, false);
+            logger.debug(("unzip complete. buffer length="+unzip.getBufferLength()));
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {
             throw new ConnectorException(String.format("error unzipping '%s'", source),
@@ -135,6 +146,7 @@ public class ZipConnectorClient extends ConnectorClient {
      */
     @Command(name = ATTR)
     public BasicFileAttributeView getAttributes(String path) throws ConnectorException, IOException {
+        logger.debug(String.format("ATTR '%s'", path));
         try {
             String rootPath = config.getRootPath();
             Path fullPath = Paths.get(rootPath, path);
@@ -142,7 +154,9 @@ public class ZipConnectorClient extends ConnectorClient {
             fullPath = validatePath(fullPath);
             File file = fullPath.toFile();
             if (file.getName().equals(DIRECTORY_ZIP)) {
-                return new ZipFileAttributes(DIRECTORY_ZIP);
+                return new ZipFileAttributes(DIRECTORY_ZIP,
+                        new ZipDirectoryInputStream(fullPath.getParent(), config.getCompressionLevel()),
+                        logger);
             } else if (!file.exists() || !file.isDirectory()) {
                 throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path),
                         ConnectorException.Category.fileNonExistentOrNoAccess);
