@@ -14,7 +14,11 @@ import com.cleo.labs.util.zip.LambdaReaderOutputStream;
 
 public class ZipDirectoryOutputStream extends FilterOutputStream implements LambdaReaderOutputStream.Reader {
 
-    private Path path;
+    public interface Resolver {
+        public File resolve(Path path);
+    }
+
+    private File path;
     private String canonical;
     private LambdaReaderOutputStream output;
     private InputStream input;
@@ -25,15 +29,16 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private byte[] buffer;
     private boolean closed;
     private UnZipProcessor processor;
+    private Resolver resolver;
 
     private static final int ENTRY_NEED = 512;
     private static final int BUFFER_SIZE = 8192;
     private static final int BUFFER_NEED = 2*BUFFER_SIZE;
 
-    public ZipDirectoryOutputStream(Path path) throws IOException {
+    public ZipDirectoryOutputStream(File path, Resolver resolver) throws IOException {
         super(null);
         this.path = path;
-        this.canonical = path.toFile().getCanonicalPath();
+        this.canonical = path.getCanonicalPath();
         this.output = new LambdaReaderOutputStream(this, ENTRY_NEED);
         this.input = output.getInputStream();
         this.unzip = new ZipInputStream(input);
@@ -44,6 +49,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         this.closed = false;
         this.out = output;
         this.processor = defaultProcessor;
+        this.resolver = resolver;
     }
 
     public interface UnZipProcessor {
@@ -55,7 +61,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
             ef.mkdirs();
             return null;
         } else {
-            File parent = new File(ef.getParent());
+            File parent = ef.getParentFile();
             if (!parent.exists()) {
                 parent.mkdirs();
             } else if (!parent.isDirectory()) {
@@ -85,9 +91,9 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 unzip = null;
                 return BUFFER_SIZE;
             } else {
-                entryFile = path.resolve(entry.getName()).toFile();
+                entryFile = resolver.resolve(path.toPath().resolve(entry.getName()));
                 if (!entryFile.getCanonicalPath().startsWith(canonical)) {
-                    throw new IOException("entry name resolves outside target path: "+entry.getName());
+                    throw new IOException("entry name resolves outside target path: "+ entry.getName());
                 }
                 if (processor != null) {
                     os = processor.process(entry, entryFile);
@@ -99,7 +105,11 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
             if (n < 0) {
                 unzip.closeEntry();
                 if (entry.getTime() >= 0) {
-                    entryFile.setLastModified(entry.getTime());
+                    try {
+                        entryFile.setLastModified(entry.getTime());
+                    } catch (Exception ignore) {
+                        // don't worry about it -- some URIs don't allow this
+                    }
                 }
                 entry = null;
                 entryFile = null;

@@ -13,7 +13,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.Date;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import org.junit.Test;
 
@@ -24,6 +23,7 @@ public class TestZipDirectoryInputStream {
 
     private static final Path ZIP = Paths.get(System.getProperty("user.home"), "Downloads", "test.zip");
 
+    @SuppressWarnings("unused")
     private static class NoisyFileInputStream extends FilterInputStream {
 
         protected NoisyFileInputStream(Path path) throws FileNotFoundException {
@@ -80,7 +80,7 @@ public class TestZipDirectoryInputStream {
 
     @Test
     public void test() throws IOException {
-        ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get("."), Deflater.NO_COMPRESSION);
+        ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), Deflater.NO_COMPRESSION);
         long totalSize = zip.getTotalSize();
         System.out.println("totalSize="+totalSize);
         Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
@@ -91,7 +91,7 @@ public class TestZipDirectoryInputStream {
         int i = 0;
         while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;
         Path testbox = sandbox.resolve(String.valueOf(i));
-        ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(testbox);
+        ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(testbox.toFile(), Path::toFile);
         Files.copy(ZIP, unzip);
         unzip.close();
         /*

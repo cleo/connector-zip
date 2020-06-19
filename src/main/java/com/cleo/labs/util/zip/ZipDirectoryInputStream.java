@@ -16,7 +16,7 @@ import com.google.common.io.ByteStreams;
 
 public class ZipDirectoryInputStream extends FilterInputStream implements LambdaWriterInputStream.Writer {
 
-    private Path path;
+    private File path;
     private int level;
     private Iterator<Path> files;
     private OutputStream output;
@@ -28,12 +28,12 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     private long currentSize;
     private long totalSize;
 
-    public ZipDirectoryInputStream(Path path) throws IOException {
+    public ZipDirectoryInputStream(File path) throws IOException {
         this(path, Deflater.DEFAULT_COMPRESSION);
     }
 
     private void setup() throws IOException {
-        this.files = Files.find(path, Integer.MAX_VALUE, (p, a) -> !p.equals(path) && !a.isSymbolicLink()).iterator();
+        this.files = Files.find(path.toPath(), Integer.MAX_VALUE, (p, a) -> !p.equals(path) && !a.isSymbolicLink()).iterator();
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
@@ -45,7 +45,7 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.currentSize = 0L;
     }
 
-    public ZipDirectoryInputStream(Path path, int level) throws IOException {
+    public ZipDirectoryInputStream(File path, int level) throws IOException {
         super(null);
         this.path = path;
         this.level = level;
@@ -82,13 +82,15 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             if (files.hasNext()) {
                 Path next = files.next();
                 File file = next.toFile();
-                String name = path.relativize(next).toString();
+                String name = path.toPath().relativize(next).toString();
                 if (file.isDirectory()) {
-                    entry = new ZipEntry(name+"/");
-                    entry.setTime(file.lastModified());
-                    entry.setSize(0L);
-                    zip.putNextEntry(entry);
-                    zip.closeEntry();
+                    if (!name.isEmpty()) {
+                        entry = new ZipEntry(name+"/");
+                        entry.setTime(file.lastModified());
+                        entry.setSize(0L);
+                        zip.putNextEntry(entry);
+                        zip.closeEntry();
+                    }
                     entry = null;
                 } else {
                     entry = new ZipEntry(name);

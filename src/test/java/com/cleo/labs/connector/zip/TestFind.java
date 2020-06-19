@@ -21,7 +21,10 @@ public class TestFind {
         while (files.hasNext()) {
             Path p = files.next();
             if (p.toFile().isDirectory()) {
-                System.out.println(root.relativize(p)+"/");
+                String name = root.relativize(p).toString();
+                if (!name.isEmpty()) {
+                    System.out.println(name+"/");
+                }
             } else {
                 System.out.println(root.relativize(p));
             }

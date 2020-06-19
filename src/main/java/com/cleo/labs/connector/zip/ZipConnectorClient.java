@@ -28,15 +28,20 @@ import com.cleo.connector.api.command.PutCommand;
 import com.cleo.connector.api.directory.Directory.Type;
 import com.cleo.connector.api.directory.Entry;
 import com.cleo.connector.api.helper.Attributes;
+import com.cleo.connector.api.interfaces.IConnectorConfig;
 import com.cleo.connector.api.interfaces.IConnectorIncoming;
 import com.cleo.connector.api.interfaces.IConnectorOutgoing;
 import com.cleo.connector.file.FileAttributes;
+import com.cleo.connector.shell.interfaces.IConnector;
+import com.cleo.connector.shell.interfaces.IConnectorHost;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
+import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
 
 public class ZipConnectorClient extends ConnectorClient {
     private ZipConnectorConfig config;
+    private LexFileFactory factory;
 
     /**
      * Constructs a new {@code ZipConnectorClient} for the schema
@@ -44,6 +49,14 @@ public class ZipConnectorClient extends ConnectorClient {
      */
     public ZipConnectorClient(ZipConnectorSchema schema) {
         this.config = new ZipConnectorConfig(this, schema);
+        this.factory = new LexFileFactory();
+    }
+
+    @Override
+    public ConnectorClient setup(IConnector connector, IConnectorConfig connectorConfig, IConnectorHost connectorHost) {
+        super.setup(connector, connectorConfig, connectorHost);
+        factory.setup(connectorHost, this.getAction());
+        return this;
     }
 
     private static final String DIRECTORY_ZIP = "directory.zip";
@@ -66,10 +79,11 @@ public class ZipConnectorClient extends ConnectorClient {
             throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path.toString()),
                     ConnectorException.Category.fileNonExistentOrNoAccess);
         }
+        factory.setSourceAndDest(dir.getSource().getPath(), null, MacroUtil.SOURCE_FILE, logger);
 
         List<Entry> dirList = new ArrayList<>();
 
-        File[] files = path.toFile().listFiles();
+        File[] files = factory.getFile(path).listFiles();
         if (files != null) {
             for (File file: files) {
                 if (file.isDirectory()) {
@@ -96,7 +110,9 @@ public class ZipConnectorClient extends ConnectorClient {
         Path path = Paths.get(config.getRootPath(), source);
         blockAccessOutsideRootPath(path, config.getRootPath());
         path = validatePath(path);
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(path.getParent(), config.getCompressionLevel())) {
+        factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, logger);
+
+        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(factory.getFile(path.getParent()), config.getCompressionLevel())) {
             transfer(zip, destination.getStream(), true);
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {
@@ -115,8 +131,9 @@ public class ZipConnectorClient extends ConnectorClient {
         Path path = Paths.get(config.getRootPath(), destination);
         blockAccessOutsideRootPath(path, config.getRootPath());
         path = validatePath(path);
+        factory.setSourceAndDest(put.getSource().getName(), put.getDestination().getPath(), MacroUtil.DEST_FILE, logger);
 
-        try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(path.getParent())) {
+        try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(factory.getFile(path.getParent()), factory::getFile)) {
             if (config.getSimulateUnzip()) {
                 unzip.setProcessor((e, ef) -> {
                     if (e.isDirectory()) {
@@ -125,6 +142,21 @@ public class ZipConnectorClient extends ConnectorClient {
                         logger.logDetail("file "+e.getName(), 1);
                     }
                     return null;
+                });
+            } else {
+                unzip.setProcessor((e, ef) -> {
+                    if (e.isDirectory()) {
+                        ef.mkdirs();
+                        return null;
+                    } else {
+                        File parent = ef.getParentFile();
+                        if (!parent.exists()) {
+                            parent.mkdirs();
+                        } else if (!parent.isDirectory()) {
+                            throw new IOException("can not create parent directory for "+e.getName()+": file already exists");
+                        }
+                        return factory.getOutputStream(ef.toPath(), MacroUtil.DEST_FILE);
+                    }
                 });
             }
             transfer(source.getStream(), unzip, false);
@@ -152,10 +184,11 @@ public class ZipConnectorClient extends ConnectorClient {
             Path fullPath = Paths.get(rootPath, path);
             blockAccessOutsideRootPath(fullPath, rootPath);
             fullPath = validatePath(fullPath);
-            File file = fullPath.toFile();
+            factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, logger);
+            File file = factory.getFile(fullPath);
             if (file.getName().equals(DIRECTORY_ZIP)) {
                 return new ZipFileAttributes(DIRECTORY_ZIP,
-                        new ZipDirectoryInputStream(fullPath.getParent(), config.getCompressionLevel()),
+                        new ZipDirectoryInputStream(fullPath.getParent().toFile(), config.getCompressionLevel()),
                         logger);
             } else if (!file.exists() || !file.isDirectory()) {
                 throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path),
