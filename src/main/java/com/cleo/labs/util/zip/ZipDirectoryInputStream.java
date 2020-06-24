@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -33,7 +34,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     }
 
     private void setup() throws IOException {
-        this.files = Files.find(path.toPath(), Integer.MAX_VALUE, (p, a) -> !p.equals(path) && !a.isSymbolicLink()).iterator();
+        Path root = Paths.get(path.toString());
+        this.files = Files.find(root, Integer.MAX_VALUE, (p, a) -> !p.equals(root) && !a.isSymbolicLink()).iterator();
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
@@ -62,7 +64,6 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         } else {
             totalSize = ByteStreams.exhaust(this);
             close();
-            setup();
             return totalSize;
         }
     }

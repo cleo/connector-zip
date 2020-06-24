@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -18,8 +19,6 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         public File resolve(Path path);
     }
 
-    private File path;
-    private String canonical;
     private LambdaReaderOutputStream output;
     private InputStream input;
     private ZipInputStream unzip;
@@ -35,10 +34,8 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private static final int BUFFER_SIZE = 8192;
     private static final int BUFFER_NEED = 2*BUFFER_SIZE;
 
-    public ZipDirectoryOutputStream(File path, Resolver resolver) throws IOException {
+    public ZipDirectoryOutputStream(Resolver resolver) throws IOException {
         super(null);
-        this.path = path;
-        this.canonical = path.getCanonicalPath();
         this.output = new LambdaReaderOutputStream(this, ENTRY_NEED);
         this.input = output.getInputStream();
         this.unzip = new ZipInputStream(input);
@@ -91,10 +88,8 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 unzip = null;
                 return BUFFER_SIZE;
             } else {
-                entryFile = resolver.resolve(path.toPath().resolve(entry.getName()));
-                if (!entryFile.getCanonicalPath().startsWith(canonical)) {
-                    throw new IOException("entry name resolves outside target path: "+ entry.getName());
-                }
+                Path entryPath = Paths.get(entry.getName());
+                entryFile = resolver.resolve(safeChild(entryPath));
                 if (processor != null) {
                     os = processor.process(entry, entryFile);
                 }
@@ -126,6 +121,18 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 return BUFFER_NEED;
             }
         }
+    }
+
+    private Path safeChild(Path child) {
+        Path root = child.getRoot();
+        if (root != null) {
+            child = root.relativize(child);
+        }
+        child = child.normalize();
+        while (child.startsWith("..")) {
+            child = child.subpath(1, child.getNameCount());
+        }
+        return child;
     }
 
     @Override

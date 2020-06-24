@@ -1,5 +1,6 @@
 package com.cleo.labs.connector.zip;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
@@ -47,9 +48,20 @@ public class LexFileFactory {
         this.logger = logger;
     }
 
-    public LexFile getFile(Path path) {
+    public LexFile getFile(String filename, Path subpath) {
+        StringBuilder s = new StringBuilder().append(filename);
+        if (s.charAt(s.length()-1) != '/') {
+            s.append('/');
+        }
+        for (Path element : subpath) {
+            s.append(element.toString()).append('/');
+        }
+        s.setLength(s.length()-1);
+        return getFile(s.toString());
+    }
+
+    public LexFile getFile(String filename) {
         try {
-            String filename = path.toString();
             filename = new MacroReplacement().replaceMacrosInString((LexHostBean) host, (LexActionBean) action, filename, source, dest, col);
             LexFile file = new LexFile(filename);
             if (!file.isAbsolute() && !Strings.isNullOrEmpty(this.inbox)) {
@@ -68,10 +80,13 @@ public class LexFileFactory {
         }
     }
 
-    public OutputStream getOutputStream(Path path, int col) throws IOException {
-        LexFile file = getFile(path);
+    public OutputStream getOutputStream(String filename, int col) throws IOException {
+        return getOutputStream(getFile(filename), col);
+    }
+
+    public OutputStream getOutputStream(File file, int col) throws IOException {
         try {
-            NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream(file), (LexActionBean) action, false);
+            NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream((LexFile)file), (LexActionBean) action, false);
             nfos.setLogTransfers(false);
             nfos.setNoThrottle();
             return nfos;

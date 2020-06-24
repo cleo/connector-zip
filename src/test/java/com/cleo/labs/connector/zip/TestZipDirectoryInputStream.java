@@ -2,6 +2,7 @@ package com.cleo.labs.connector.zip;
 
 import static org.junit.Assert.*;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FilterInputStream;
@@ -21,13 +22,13 @@ import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
 
 public class TestZipDirectoryInputStream {
 
-    private static final Path ZIP = Paths.get(System.getProperty("user.home"), "Downloads", "test.zip");
+    private static final java.nio.file.Path ZIP = Paths.get(System.getProperty("user.home"), "Downloads", "test.zip");
 
     @SuppressWarnings("unused")
     private static class NoisyFileInputStream extends FilterInputStream {
 
-        protected NoisyFileInputStream(Path path) throws FileNotFoundException {
-            super(new FileInputStream(path.toFile()));
+        protected NoisyFileInputStream(String filename) throws FileNotFoundException {
+            super(new FileInputStream(filename));
         }
 
         @Override
@@ -80,18 +81,22 @@ public class TestZipDirectoryInputStream {
 
     @Test
     public void test() throws IOException {
-        ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), Deflater.NO_COMPRESSION);
-        long totalSize = zip.getTotalSize();
-        System.out.println("totalSize="+totalSize);
-        Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
-        assertTrue(ZIP.toFile().exists());
-        assertEquals(totalSize, ZIP.toFile().length());
-        assertEquals(totalSize, zip.getCurrentSize());
+        long totalSize = 0;
+        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), Deflater.NO_COMPRESSION)) {
+            totalSize = zip.getTotalSize();
+            System.out.println("totalSize="+totalSize);
+        }
+        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), Deflater.NO_COMPRESSION)) {
+            Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
+            assertTrue(ZIP.toFile().exists());
+            assertEquals(totalSize, ZIP.toFile().length());
+            assertEquals(totalSize, zip.getCurrentSize());
+        }
         Path sandbox = Paths.get(System.getProperty("user.home"), "Downloads", "sand");
         int i = 0;
         while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;
         Path testbox = sandbox.resolve(String.valueOf(i));
-        ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(testbox.toFile(), Path::toFile);
+        ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> testbox.resolve(p).toFile());
         Files.copy(ZIP, unzip);
         unzip.close();
         /*
