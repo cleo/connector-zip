@@ -1,41 +1,44 @@
 package com.cleo.labs.util.zip;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import com.cleo.labs.util.zip.Finder.Found;
+import com.google.common.base.Joiner;
 import com.google.common.io.ByteStreams;
 
 public class ZipDirectoryInputStream extends FilterInputStream implements LambdaWriterInputStream.Writer {
 
+    public interface Opener {
+        public InputStream open(Found file) throws IOException;
+    }
+
     private File path;
+    private Opener opener;
     private int level;
-    private Iterator<Path> files;
+    private Iterator<Found> files;
     private OutputStream output;
     private LambdaWriterInputStream input;
     private ZipOutputStream zip;
     private ZipEntry entry;
-    private FileInputStream fis;
+    private InputStream is;
     private byte[] buffer;
     private long currentSize;
     private long totalSize;
 
-    public ZipDirectoryInputStream(File path) throws IOException {
-        this(path, Deflater.DEFAULT_COMPRESSION);
+    public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
+        this(path, opener, Deflater.DEFAULT_COMPRESSION);
     }
 
     private void setup() throws IOException {
-        Path root = Paths.get(path.toString());
-        this.files = Files.find(root, Integer.MAX_VALUE, (p, a) -> !p.equals(root) && !a.isSymbolicLink()).iterator();
+        this.files = new Finder(path);
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
@@ -43,13 +46,14 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         zip.setMethod(ZipEntry.DEFLATED);
         zip.setLevel(level);
         this.entry = null;
-        this.fis = null;
+        this.is = null;
         this.currentSize = 0L;
     }
 
-    public ZipDirectoryInputStream(File path, int level) throws IOException {
+    public ZipDirectoryInputStream(File path, Opener opener, int level) throws IOException {
         super(null);
         this.path = path;
+        this.opener = opener;
         this.level = level;
         this.buffer = new byte[LambdaWriterInputStream.DEFAULT_BUFFERSIZE];
         this.totalSize = -1L;
@@ -81,13 +85,12 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         if (entry == null) {
             // time to get the next file and set up a new ZipEntry
             if (files.hasNext()) {
-                Path next = files.next();
-                File file = next.toFile();
-                String name = path.toPath().relativize(next).toString();
-                if (file.isDirectory()) {
+                Found next = files.next();
+                String name = Joiner.on('/').join(next.path);
+                if (next.directory) {
                     if (!name.isEmpty()) {
                         entry = new ZipEntry(name+"/");
-                        entry.setTime(file.lastModified());
+                        entry.setTime(next.file.lastModified());
                         entry.setSize(0L);
                         zip.putNextEntry(entry);
                         zip.closeEntry();
@@ -95,11 +98,11 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
                     entry = null;
                 } else {
                     entry = new ZipEntry(name);
-                    entry.setTime(file.lastModified());
-                    entry.setSize(file.length());
-                    entry.setCompressedSize(file.length());
+                    entry.setTime(next.file.lastModified());
+                    entry.setSize(next.file.length());
+                    entry.setCompressedSize(next.file.length());
                     zip.putNextEntry(entry);
-                    fis = new FileInputStream(file);
+                    is = opener.open(next);
                 }
             } else {
                 zip.close();
@@ -109,12 +112,12 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             }
         } else {
             // time to shuttle a buffer across
-            int n = fis.read(buffer);
+            int n = is.read(buffer);
             if (n < 0) {
                 zip.closeEntry();
-                fis.close();
+                is.close();
                 entry = null;
-                fis = null;
+                is = null;
             } else {
                 zip.write(buffer, 0, n);
             }
@@ -143,10 +146,10 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     @Override
     public void close() throws IOException {
         IOException exception = null;
-        if (fis != null) {
+        if (is != null) {
             try {
-                fis.close();
-                fis = null;
+                is.close();
+                is = null;
             } catch (IOException e) {
                 exception = e;
             }

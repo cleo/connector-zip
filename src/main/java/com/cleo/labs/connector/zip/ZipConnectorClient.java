@@ -120,7 +120,9 @@ public class ZipConnectorClient extends ConnectorClient {
 
         factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, logger);
 
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(factory.getFile(root+source), config.getCompressionLevel())) {
+        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(factory.getFile(root+source),
+                f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE),
+                config.getCompressionLevel())) {
             transfer(zip, destination.getStream(), true);
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {
@@ -191,7 +193,9 @@ public class ZipConnectorClient extends ConnectorClient {
         File file = factory.getFile(filename);
         if (file.getName().equals(DIRECTORY_ZIP)) {
             try {
-                ZipDirectoryInputStream zis = new ZipDirectoryInputStream(factory.getFile(root+justDirectory(path)), config.getCompressionLevel());
+                ZipDirectoryInputStream zis = new ZipDirectoryInputStream(factory.getFile(root+justDirectory(path)),
+                        f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE),
+                        config.getCompressionLevel());
                 return new ZipFileAttributes(DIRECTORY_ZIP, zis, logger);
             } catch (NoSuchFileException e) {
                 // fall through to fileNonExistentOrNoAccess

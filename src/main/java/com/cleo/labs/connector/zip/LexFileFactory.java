@@ -2,6 +2,7 @@ package com.cleo.labs.connector.zip;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
 
@@ -15,6 +16,7 @@ import com.cleo.lexicom.beans.LexHostBean;
 import com.cleo.lexicom.beans.LexIO;
 import com.cleo.lexicom.beans.LexURIFileUtil;
 import com.cleo.lexicom.beans.MacroReplacement;
+import com.cleo.lexicom.beans.NetworkFilterInputStream;
 import com.cleo.lexicom.beans.NetworkFilterOutputStream;
 import com.cleo.versalex.connector.Action;
 import com.cleo.versalex.connector.Network;
@@ -77,6 +79,23 @@ public class LexFileFactory {
             return file;
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public InputStream getInputStream(String filename, int col) throws IOException {
+        return getInputStream(getFile(filename), col);
+    }
+
+    public InputStream getInputStream(File file, int col) throws IOException {
+        try {
+            NetworkFilterInputStream nfis = new NetworkFilterInputStream(LexIO.getFileInputStream((LexFile)file), (LexActionBean) action, false);
+            nfis.setLogTransfers(false);
+            nfis.setNoThrottle();
+            return nfis;
+        } catch (IOException ioe) {
+            throw ioe;
+        } catch (Exception e) {
+            throw new IOException(e);
         }
     }
 

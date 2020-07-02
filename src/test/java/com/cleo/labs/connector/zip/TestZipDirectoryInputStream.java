@@ -82,11 +82,11 @@ public class TestZipDirectoryInputStream {
     @Test
     public void test() throws IOException {
         long totalSize = 0;
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), Deflater.NO_COMPRESSION)) {
+        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), f -> { return new FileInputStream(f.file); }, Deflater.NO_COMPRESSION)) {
             totalSize = zip.getTotalSize();
             System.out.println("totalSize="+totalSize);
         }
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), Deflater.NO_COMPRESSION)) {
+        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), f -> { return new FileInputStream(f.file); }, Deflater.NO_COMPRESSION)) {
             Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
             assertTrue(ZIP.toFile().exists());
             assertEquals(totalSize, ZIP.toFile().length());
