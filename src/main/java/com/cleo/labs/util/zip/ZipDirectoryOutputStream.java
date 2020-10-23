@@ -11,8 +11,6 @@ import java.nio.file.Paths;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.cleo.labs.util.zip.LambdaReaderOutputStream;
-
 public class ZipDirectoryOutputStream extends FilterOutputStream implements LambdaReaderOutputStream.Reader {
 
     public interface Resolver {

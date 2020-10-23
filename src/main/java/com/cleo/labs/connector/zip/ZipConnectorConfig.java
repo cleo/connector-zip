@@ -40,4 +40,12 @@ public class ZipConnectorConfig {
             return false;
         }
     }
+
+    public boolean getSuppressDirectoryCreation() {
+        try {
+            return schema.suppressDirectoryCreation.getValue(client);
+        } catch (ConnectorPropertyException e) {
+            return false;
+        }
+    }
 }

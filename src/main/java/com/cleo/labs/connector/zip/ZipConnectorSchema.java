@@ -53,6 +53,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
             .build();
 
+    @Property
+    final IConnectorProperty<Boolean> suppressDirectoryCreation = new PropertyBuilder<>("SuppressDirectoryCreation", false)
+            .setAllowedInSetCommand(true)
+            .setDescription("Suppress the creation of directories. "+
+                 "Use with cloud storage infrastructures that don't require directories.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
+
     @Info
     protected static String info() throws IOException {
         return Resources.toString(ZipConnectorSchema.class.getResource("info.txt"), Charsets.UTF_8);

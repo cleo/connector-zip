@@ -154,14 +154,18 @@ public class ZipConnectorClient extends ConnectorClient {
             } else {
                 unzip.setProcessor((e, ef) -> {
                     if (e.isDirectory()) {
-                        ef.mkdirs();
+                        if (!config.getSuppressDirectoryCreation()) {
+                            ef.mkdirs();
+                        }
                         return null;
                     } else {
-                        File parent = ef.getParentFile();
-                        if (!parent.exists()) {
-                            parent.mkdirs();
-                        } else if (!parent.isDirectory()) {
-                            throw new IOException("can not create parent directory for "+e.getName()+": file already exists");
+                        if (!config.getSuppressDirectoryCreation()) {
+                            File parent = ef.getParentFile();
+                            if (!parent.exists()) {
+                                parent.mkdirs();
+                            } else if (!parent.isDirectory()) {
+                                throw new IOException("can not create parent directory for "+e.getName()+": file already exists");
+                            }
                         }
                         return factory.getOutputStream(ef, MacroUtil.DEST_FILE);
                     }
