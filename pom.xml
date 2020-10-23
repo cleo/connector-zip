@@ -43,8 +43,9 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
+        <junit.version>4.13.1</junit.version>
         <cleo.version>5.6.0.0</cleo.version>
-        <guava.version>23.0</guava.version>
+        <guava.version>26.0-jre</guava.version>
         <commons-io.version>2.4</commons-io.version>
         <maven.assembly.plugin.version>3.1.0</maven.assembly.plugin.version>
     </properties>
@@ -53,7 +54,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.11</version>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
