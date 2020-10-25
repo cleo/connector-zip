@@ -12,7 +12,7 @@ import java.util.Iterator;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import com.google.gwt.thirdparty.guava.common.base.Joiner;
+import com.google.common.base.Joiner;
 
 public class Finder implements Iterator<Finder.Found> {
 
