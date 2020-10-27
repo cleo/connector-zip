@@ -1,17 +1,19 @@
 package com.cleo.labs.util.zip;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Iterator;
+import java.util.function.Predicate;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.cleo.labs.util.zip.Finder.Found;
-import com.google.common.base.Joiner;
 import com.google.common.io.ByteStreams;
 
 public class ZipDirectoryInputStream extends FilterInputStream implements LambdaWriterInputStream.Writer {
@@ -32,13 +34,11 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     private byte[] buffer;
     private long currentSize;
     private long totalSize;
-
-    public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
-        this(path, opener, Deflater.DEFAULT_COMPRESSION);
-    }
+    private Predicate<Found> filter;
+    private DirectoryMode directoryMode;
 
     private void setup() throws IOException {
-        this.files = new Finder(path);
+        this.files = new Finder(path, filter, directoryMode);
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
@@ -50,14 +50,58 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.currentSize = 0L;
     }
 
-    public ZipDirectoryInputStream(File path, Opener opener, int level) throws IOException {
+    public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
+        this(path, opener, Deflater.DEFAULT_COMPRESSION, null, null);
+    }
+
+    public ZipDirectoryInputStream(File path,
+            Opener opener,
+            int level,
+            Predicate<Found> filter,
+            DirectoryMode directoryMode) throws IOException {
         super(null);
         this.path = path;
         this.opener = opener;
         this.level = level;
         this.buffer = new byte[LambdaWriterInputStream.DEFAULT_BUFFERSIZE];
         this.totalSize = -1L;
+        this.filter = filter==null ? Finder.ALL : filter;
+        this.directoryMode = directoryMode==null ? DirectoryMode.include : directoryMode;
         setup();
+    }
+
+    public static class Builder {
+        private File path = null;
+        private Opener opener = f -> new ByteArrayInputStream(new byte[0]);
+        private int level = Deflater.DEFAULT_COMPRESSION;
+        private Predicate<Found> filter = Finder.ALL;
+        private DirectoryMode directoryMode = DirectoryMode.include;
+        public Builder(File path) {
+            this.path = path;
+        }
+        public Builder opener(Opener opener) {
+            this.opener = opener;
+            return this;
+        }
+        public Builder level(int level) {
+            this.level = level;
+            return this;
+        }
+        public Builder filter(Predicate<Found> filter) {
+            this.filter = filter;
+            return this;
+        }
+        public Builder directoryMode(DirectoryMode directoryMode) {
+            this.directoryMode = directoryMode;
+            return this;
+        }
+        public ZipDirectoryInputStream build() throws IOException {
+            return new ZipDirectoryInputStream(path, opener, level, filter, directoryMode);
+        }
+    }
+
+    public static Builder builder(File path) {
+        return new Builder(path);
     }
 
     public long getTotalSize() throws IOException {
@@ -86,18 +130,15 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             // time to get the next file and set up a new ZipEntry
             if (files.hasNext()) {
                 Found next = files.next();
-                String name = Joiner.on('/').join(next.path);
                 if (next.directory) {
-                    if (!name.isEmpty()) {
-                        entry = new ZipEntry(name+"/");
-                        entry.setTime(next.file.lastModified());
-                        entry.setSize(0L);
-                        zip.putNextEntry(entry);
-                        zip.closeEntry();
-                    }
+                    entry = new ZipEntry(next.fullname);
+                    entry.setTime(next.file.lastModified());
+                    entry.setSize(0L);
+                    zip.putNextEntry(entry);
+                    zip.closeEntry();
                     entry = null;
                 } else {
-                    entry = new ZipEntry(name);
+                    entry = new ZipEntry(next.fullname);
                     entry.setTime(next.file.lastModified());
                     entry.setSize(next.file.length());
                     entry.setCompressedSize(next.file.length());

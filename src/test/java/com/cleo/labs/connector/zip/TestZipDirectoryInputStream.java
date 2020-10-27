@@ -82,11 +82,17 @@ public class TestZipDirectoryInputStream {
     @Test
     public void test() throws IOException {
         long totalSize = 0;
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), f -> { return new FileInputStream(f.file); }, Deflater.NO_COMPRESSION)) {
+        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
+                .opener(f -> { return new FileInputStream(f.file); })
+                .level(Deflater.NO_COMPRESSION)
+                .build()) {
             totalSize = zip.getTotalSize();
             System.out.println("totalSize="+totalSize);
         }
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(Paths.get(".").toFile(), f -> { return new FileInputStream(f.file); }, Deflater.NO_COMPRESSION)) {
+        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
+                .opener(f -> { return new FileInputStream(f.file); })
+                .level(Deflater.NO_COMPRESSION)
+                .build()) {
             Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
             assertTrue(ZIP.toFile().exists());
             assertEquals(totalSize, ZIP.toFile().length());
@@ -97,6 +103,7 @@ public class TestZipDirectoryInputStream {
         while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;
         Path testbox = sandbox.resolve(String.valueOf(i));
         ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> testbox.resolve(p).toFile());
+        unzip.setFilter(ZipDirectoryOutputStream.excluding("glob:.git/**","glob:**/*.class"));
         Files.copy(ZIP, unzip);
         unzip.close();
         /*

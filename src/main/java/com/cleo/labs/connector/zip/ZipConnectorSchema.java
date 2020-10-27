@@ -40,10 +40,19 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
-    final IConnectorProperty<String> retrieveDirectorySort = CommonProperties.of(CommonProperty.RetrieveDirectorySort);  
+    final public IConnectorProperty<String> exclusions = new PropertyBuilder<>("Exclusions", "")
+            .setAllowedInSetCommand(false)
+            .setDescription("A list of file/path patterns to exclude from zipping and unzipping.")
+            .setExtendedClass(ExclusionTableProperty.class)
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
 
     @Property
-    final IConnectorProperty<Boolean> enableDebug = CommonProperties.of(CommonProperty.EnableDebug);
+    final IConnectorProperty<Boolean> dontZipEmptyDirectories = new PropertyBuilder<>("DontZipEmptyDirectories", false)
+            .setAllowedInSetCommand(false)
+            .setDescription("Don't include empty directories when zipping.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
 
     @Property
     final IConnectorProperty<Boolean> simulateUnzip = new PropertyBuilder<>("SimulateUnzip", false)
@@ -60,6 +69,12 @@ public class ZipConnectorSchema extends ConnectorConfig {
                  "Use with cloud storage infrastructures that don't require directories.")
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
             .build();
+
+    @Property
+    final IConnectorProperty<String> retrieveDirectorySort = CommonProperties.of(CommonProperty.RetrieveDirectorySort);
+
+    @Property
+    final IConnectorProperty<Boolean> enableDebug = CommonProperties.of(CommonProperty.EnableDebug);
 
     @Info
     protected static String info() throws IOException {

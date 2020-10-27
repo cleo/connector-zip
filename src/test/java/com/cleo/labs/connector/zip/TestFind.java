@@ -8,10 +8,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Iterator;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class TestFind {
 
+    @Ignore
     @Test
     public void test() throws IOException {
         Path root = Paths.get(".");

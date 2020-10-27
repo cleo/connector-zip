@@ -32,6 +32,7 @@ import com.cleo.connector.api.interfaces.IConnectorOutgoing;
 import com.cleo.connector.file.FileAttributes;
 import com.cleo.connector.shell.interfaces.IConnector;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
+import com.cleo.labs.util.zip.Finder;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
 import com.cleo.util.MacroUtil;
@@ -120,9 +121,12 @@ public class ZipConnectorClient extends ConnectorClient {
 
         factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, logger);
 
-        try (ZipDirectoryInputStream zip = new ZipDirectoryInputStream(factory.getFile(root+source),
-                f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE),
-                config.getCompressionLevel())) {
+        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+source))
+                .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
+                .level(config.getCompressionLevel())
+                .filter(Finder.excluding(config.getExclusions()))
+                .directoryMode(config.getDirectoryMode())
+                .build()) {
             transfer(zip, destination.getStream(), true);
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {
@@ -142,6 +146,7 @@ public class ZipConnectorClient extends ConnectorClient {
         factory.setSourceAndDest(put.getSource().getName(), put.getDestination().getPath(), MacroUtil.DEST_FILE, logger);
 
         try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> factory.getFile(root+destination, p))) {
+            unzip.setFilter(ZipDirectoryOutputStream.excluding(config.getExclusions()));
             if (config.getSimulateUnzip()) {
                 unzip.setProcessor((e, ef) -> {
                     if (e.isDirectory()) {
@@ -196,10 +201,10 @@ public class ZipConnectorClient extends ConnectorClient {
         factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, logger);
         File file = factory.getFile(filename);
         if (file.getName().equals(DIRECTORY_ZIP)) {
-            try {
-                ZipDirectoryInputStream zis = new ZipDirectoryInputStream(factory.getFile(root+justDirectory(path)),
-                        f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE),
-                        config.getCompressionLevel());
+            try (ZipDirectoryInputStream zis = ZipDirectoryInputStream.builder(factory.getFile(root+justDirectory(path)))
+                        .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
+                        .level(config.getCompressionLevel())
+                        .build()) {
                 return new ZipFileAttributes(DIRECTORY_ZIP, zis, logger);
             } catch (NoSuchFileException e) {
                 // fall through to fileNonExistentOrNoAccess

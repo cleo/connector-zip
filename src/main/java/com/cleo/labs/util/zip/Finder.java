@@ -132,7 +132,12 @@ public class Finder implements Iterator<Finder.Found> {
 
     public static Predicate<Found> ALL = found->true;
 
+    public static Predicate<Found> NONE = found->false;
+
     public static Predicate<Found> excluding(String...patterns) {
+        if (patterns==null || patterns.length==0) {
+            return ALL;
+        }
         PathMatcher[] matchers = new PathMatcher[patterns.length];
         FileSystem fs = FileSystems.getDefault();
         for (int i=0; i<patterns.length; i++) {
@@ -143,6 +148,9 @@ public class Finder implements Iterator<Finder.Found> {
     }
 
     public static Predicate<Found> including(String...patterns) {
+        if (patterns==null || patterns.length==0) {
+            return NONE;
+        }
         PathMatcher[] matchers = new PathMatcher[patterns.length];
         FileSystem fs = FileSystems.getDefault();
         for (int i=0; i<patterns.length; i++) {

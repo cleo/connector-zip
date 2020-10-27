@@ -6,8 +6,13 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
+import java.util.function.BiPredicate;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -25,6 +30,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private OutputStream os;
     private byte[] buffer;
     private boolean closed;
+    private BiPredicate<ZipEntry,Path> filter;
     private UnZipProcessor processor;
     private Resolver resolver;
 
@@ -66,8 +72,14 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         }
     };
 
-    public void setProcessor(UnZipProcessor processor) {
+    public ZipDirectoryOutputStream setProcessor(UnZipProcessor processor) {
         this.processor = processor;
+        return this;
+    }
+
+    public ZipDirectoryOutputStream setFilter(BiPredicate<ZipEntry,Path> filter) {
+        this.filter = filter;
+        return this;
     }
 
     public int getBufferLength() {
@@ -87,8 +99,9 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 return BUFFER_SIZE;
             } else {
                 Path entryPath = Paths.get(entry.getName());
+                Path safePath = safeChild(entryPath);
                 entryFile = resolver.resolve(safeChild(entryPath));
-                if (processor != null) {
+                if (processor != null && filter.test(entry,safePath)) {
                     os = processor.process(entry, entryFile);
                 }
                 return BUFFER_NEED;
@@ -162,4 +175,22 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
             throw exception;
         }
     }
+
+    public static BiPredicate<ZipEntry,Path> ALL = (entry,path)->true;
+
+    public static BiPredicate<ZipEntry,Path> NONE = (entry,path)->false;
+
+    public static BiPredicate<ZipEntry,Path> excluding(String...patterns) {
+        if (patterns==null || patterns.length==0) {
+            return ALL;
+        }
+        PathMatcher[] matchers = new PathMatcher[patterns.length];
+        FileSystem fs = FileSystems.getDefault();
+        for (int i=0; i<patterns.length; i++) {
+            matchers[i] = fs.getPathMatcher(patterns[i]);
+        }
+        return (entry,path)->!Stream.of(matchers)
+            .anyMatch(m -> m.matches(path));
+    }
+
 }
