@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.cleo.labs.connector</groupId>
-    <artifactId>zip</artifactId>
+    <artifactId>connector-zip</artifactId>
     <version>5.6.0.0</version>
     <packaging>jar</packaging>
 
