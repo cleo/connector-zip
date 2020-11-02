@@ -53,22 +53,42 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         this.resolver = resolver;
     }
 
-    public interface UnZipProcessor {
-        public OutputStream process(ZipEntry entry, File entryFile) throws IOException;
+    public static class UnZipEntry {
+        private ZipEntry entry;
+        private File file;
+        private Path path;
+        public ZipEntry entry() {
+            return entry;
+        }
+        public File file() {
+            return file;
+        }
+        public Path path() {
+            return path;
+        }
+        public UnZipEntry(ZipEntry entry, File file, Path path) {
+            this.entry = entry;
+            this.file = file;
+            this.path = path;
+        }
     }
 
-    public static UnZipProcessor defaultProcessor = (e, ef) -> {
-        if (e.isDirectory()) {
-            ef.mkdirs();
+    public interface UnZipProcessor {
+        public OutputStream process(UnZipEntry zip) throws IOException;
+    }
+
+    public static UnZipProcessor defaultProcessor = zip -> {
+        if (zip.entry().isDirectory()) {
+            zip.file().mkdirs();
             return null;
         } else {
-            File parent = ef.getParentFile();
+            File parent = zip.file().getParentFile();
             if (!parent.exists()) {
                 parent.mkdirs();
             } else if (!parent.isDirectory()) {
-                throw new IOException("can not create parent directory for "+e.getName()+": file already exists");
+                throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
             }
-            return new FileOutputStream(ef);
+            return new FileOutputStream(zip.file());
         }
     };
 
@@ -102,7 +122,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 Path safePath = safeChild(entryPath);
                 entryFile = resolver.resolve(safeChild(entryPath));
                 if (processor != null && filter.test(entry,safePath)) {
-                    os = processor.process(entry, entryFile);
+                    os = processor.process(new UnZipEntry(entry, entryFile, safePath));
                 }
                 return BUFFER_NEED;
             }

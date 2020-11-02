@@ -103,6 +103,14 @@ public class TestZipDirectoryInputStream {
         while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;
         Path testbox = sandbox.resolve(String.valueOf(i));
         ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> testbox.resolve(p).toFile());
+        unzip.setProcessor((zip) -> {
+            if (zip.path().getNameCount()<=1) {
+                //System.out.println("this is a root file: "+zip.path());
+                return null;
+            } else {
+                return ZipDirectoryOutputStream.defaultProcessor.process(zip);
+            }
+        });
         unzip.setFilter(ZipDirectoryOutputStream.excluding("glob:.git/**","glob:**/*.class"));
         Files.copy(ZIP, unzip);
         unzip.close();

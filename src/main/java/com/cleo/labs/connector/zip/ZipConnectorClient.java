@@ -147,34 +147,73 @@ public class ZipConnectorClient extends ConnectorClient {
 
         try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> factory.getFile(root+destination, p))) {
             unzip.setFilter(ZipDirectoryOutputStream.excluding(config.getExclusions()));
-            if (config.getSimulateUnzip()) {
-                unzip.setProcessor((e, ef) -> {
-                    if (e.isDirectory()) {
-                        logger.logDetail("mkdir "+e.getName(), 1);
-                    } else {
-                        logger.logDetail("file "+e.getName(), 1);
-                    }
-                    return null;
-                });
-            } else {
-                unzip.setProcessor((e, ef) -> {
-                    if (e.isDirectory()) {
+            switch (config.getUnzipMode()) {
+            case unzip:
+                unzip.setProcessor(zip -> {
+                    if (zip.entry().isDirectory()) {
                         if (!config.getSuppressDirectoryCreation()) {
-                            ef.mkdirs();
+                            zip.file().mkdirs();
                         }
                         return null;
                     } else {
                         if (!config.getSuppressDirectoryCreation()) {
-                            File parent = ef.getParentFile();
+                            File parent = zip.file().getParentFile();
                             if (!parent.exists()) {
                                 parent.mkdirs();
                             } else if (!parent.isDirectory()) {
-                                throw new IOException("can not create parent directory for "+e.getName()+": file already exists");
+                                throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
                             }
                         }
-                        return factory.getOutputStream(ef, MacroUtil.DEST_FILE);
+                        return factory.getOutputStream(zip.file());
                     }
                 });
+                break;
+            case log:
+                unzip.setProcessor(zip -> {
+                    if (zip.entry().isDirectory()) {
+                        if (!config.getSuppressDirectoryCreation()) {
+                            logger.logDetail("mkdir "+zip.entry().getName(), 1);
+                        }
+                    } else {
+                        logger.logDetail("file "+zip.entry().getName(), 1);
+                    }
+                    return null;
+                });
+                break;
+            case preflight:
+                unzip.setProcessor(zip -> {
+                    // first check the implied parent directory unless we're at the top of the zip
+                    if (zip.path().getNameCount() > 1) {
+                        File parent = zip.file().getParentFile();
+                        if (parent.exists()) {
+                            if (!parent.isDirectory()) {
+                                // if we need a directory where there is an existing file, this is a problem no matter what
+                                throw new IOException("conflict detected for directory "+parent.getPath()+": file already exists");
+                            } else if (!config.getSuppressDirectoryCreation()) {
+                                // if the directory is already there, suppress failure under SuppressDirectoryCreation
+                                throw new IOException("conflict detected for directory "+parent.getPath()+": directory already exists");
+                            }
+                        }
+                    }
+                    // now check the file/directory itself
+                    if (zip.file().exists()) {
+                        if (!zip.file().isDirectory()) {
+                            // conflicts for files always fail
+                            throw new IOException("conflict detected for file "+zip.file().getPath()+": file already exists");
+                        } else if (!zip.file().isDirectory()) {
+                            // if we need a directory where there is an existing file, this is a problem no matter what
+                            throw new IOException("conflict detected for directory "+zip.file().getPath()+": file already exists");
+                        } else if (!config.getSuppressDirectoryCreation()) {
+                            // if the directory is already there, suppress failure under SuppressDirectoryCreation
+                            throw new IOException("conflict detected for directory "+zip.file().getPath()+": directory already exists");
+                        }
+                    }
+                    return null;
+                });
+                break;
+            default:
+                // won't happen
+                break;
             }
             transfer(source.getStream(), unzip, false);
             logger.debug(("unzip complete. buffer length="+unzip.getBufferLength()));

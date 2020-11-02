@@ -54,12 +54,17 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
             .build();
 
+    public enum UnzipMode {unzip, log, preflight};
+
     @Property
-    final IConnectorProperty<Boolean> simulateUnzip = new PropertyBuilder<>("SimulateUnzip", false)
-            .setAllowedInSetCommand(false)
-            .setDescription("Log directories that would be created and files that would be "+
-                 "written during the Unzip process on PUT, but do no create them.")
+    final IConnectorProperty<String> unzipMode = new PropertyBuilder<>("UnzipMode", UnzipMode.unzip.name())
+            .setAllowedInSetCommand(true)
+            .setDescription("Select \"log\" to log directories and files that would be created without "+
+                "actually creating them. Select \"preflight\" to check for possible collisions that would "+
+                "occur when unzipping, failing the transfer if any are detected. Select \"unzip\" (the default) "+
+                "to actually unzip, overwriting any existing conflicting files.")
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .setPossibleValues("", UnzipMode.unzip.name(), UnzipMode.log.name(), UnzipMode.preflight.name())
             .build();
 
     @Property

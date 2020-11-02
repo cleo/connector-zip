@@ -5,6 +5,7 @@ import java.util.zip.Deflater;
 
 import com.cleo.connector.api.property.ConnectorPropertyException;
 import com.cleo.labs.connector.zip.ExclusionTableProperty.Exclusion;
+import com.cleo.labs.connector.zip.ZipConnectorSchema.UnzipMode;
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.google.common.base.Strings;
 
@@ -67,11 +68,13 @@ public class ZipConnectorConfig {
         }
     }
 
-    public boolean getSimulateUnzip() {
+    public UnzipMode getUnzipMode() {
         try {
-            return schema.simulateUnzip.getValue(client);
-        } catch (ConnectorPropertyException e) {
-            return false;
+            String value = schema.unzipMode.getValue(client);
+            return UnzipMode.valueOf(value);
+        } catch (ConnectorPropertyException | IllegalArgumentException | NullPointerException e) {
+            // if value is null or empty we'll wind up here
+            return UnzipMode.unzip;
         }
     }
 

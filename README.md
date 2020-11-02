@@ -8,12 +8,39 @@ The zip connector is packaged in a single jar `zip-version.jar`, which should be
 
 ## Configuration ##
 
-There are two important configuration settings for the zip connector.
+There are five important configuration settings for the zip connector.
 
 Property | Description | Value | Default
 ---------|-------------|-------|--------
 Root Path | The directory to zip on `GET` or in which to unzip on `PUT` | A directory path | Unspecified
-Compression Level | the zip compression level | `none`, `1`-`9`, or `default` | `default`
+Compression Level | The zip compression level | `none`, `1`-`9`, or `default` | `default`
+Dont Zip Empty Directories | Select to skip empty directories while zipping | on or off | off
+Unzip Mode | Normal unzip, or log or preflight test options | `unzip`, `log` or `preflight` | `unzip`
+Suppress Directory Creation | Unzip files, but don't create directories | on or off | off
+
+### Unzip Modes and Preflight
+
+Set the _Unzip Mode_ to `log` to analyze a zip file by logging files and directories that would be created in the default `unzip` mode. Set _Unzip Mode_ to `preflight` to test the intended unzip destination (the _Root Path_) for existing files and directories that would be overwritten in `unzip` mode, failing the "transfer" at the first conflict detected.
+
+Use `preflight` in a JavaScript action in a manner such as:
+
+```
+importPackage(com.cleo.lexicom.external);
+var action = ISessionScript.getActionController();
+var rc = 0;
+action.execute("SET Zip.UnzipMode=preflight");
+if (action.execute("PUT test.zip")) {
+    action.execute("SET Zip.UnzipMode=unzip");
+    action.execute("PUT test.zip");
+} else {
+    rc = 1;
+}
+rc;
+```
+
+### Unzip and Cloud Storage
+
+Cloud storage infrastructures such as Amazon S3, Azure Blob Storage or Google Cloud Storage are keyed object stores that simulate a folder hierarchy with naming conventions and zero-byte objects. Select the _Suppress Directory Creation_ option to prevent the creation of folders while unzipping.
 
 ## Using Zip Connector Commands ##
 

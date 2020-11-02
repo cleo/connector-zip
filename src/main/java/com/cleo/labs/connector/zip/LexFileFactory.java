@@ -99,11 +99,11 @@ public class LexFileFactory {
         }
     }
 
-    public OutputStream getOutputStream(String filename, int col) throws IOException {
-        return getOutputStream(getFile(filename), col);
+    public OutputStream getOutputStream(String filename) throws IOException {
+        return getOutputStream(getFile(filename));
     }
 
-    public OutputStream getOutputStream(File file, int col) throws IOException {
+    public OutputStream getOutputStream(File file) throws IOException {
         try {
             NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream((LexFile)file), (LexActionBean) action, false);
             nfos.setLogTransfers(false);
