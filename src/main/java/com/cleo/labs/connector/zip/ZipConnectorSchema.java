@@ -76,6 +76,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
+    final IConnectorProperty<Boolean> unzipRootFilesLast = new PropertyBuilder<>("UnzipRootFilesLast", false)
+            .setAllowedInSetCommand(true)
+            .setDescription("While unzipping, save top-level files (those not in a subdirectory) in "+
+                 "a temporary folder until the last file is unzipped.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
+
+    @Property
     final IConnectorProperty<String> retrieveDirectorySort = CommonProperties.of(CommonProperty.RetrieveDirectorySort);
 
     @Property

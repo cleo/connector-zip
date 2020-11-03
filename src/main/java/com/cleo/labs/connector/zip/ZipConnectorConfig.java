@@ -85,4 +85,12 @@ public class ZipConnectorConfig {
             return false;
         }
     }
+
+    public boolean unzipRootFilesLast() {
+        try {
+            return schema.unzipRootFilesLast.getValue(client);
+        } catch (ConnectorPropertyException e) {
+            return false;
+        }
+    }
 }

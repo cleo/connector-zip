@@ -8,11 +8,14 @@ import static com.cleo.connector.api.command.ConnectorCommandOption.Delete;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.cleo.connector.api.ConnectorClient;
 import com.cleo.connector.api.ConnectorException;
@@ -35,6 +38,7 @@ import com.cleo.connector.shell.interfaces.IConnectorHost;
 import com.cleo.labs.util.zip.Finder;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
+import com.cleo.labs.util.zip.ZipDirectoryOutputStream.UnZipEntry;
 import com.cleo.util.MacroUtil;
 
 public class ZipConnectorClient extends ConnectorClient {
@@ -135,6 +139,66 @@ public class ZipConnectorClient extends ConnectorClient {
         }
     }
 
+    private class UnZipProcessor implements ZipDirectoryOutputStream.UnZipProcessor {
+        private String root;
+        private String tempdir = null;
+        public UnZipProcessor(String root) {
+            this.root = root;
+        }
+        @Override
+        public OutputStream process(UnZipEntry zip) throws IOException {
+            if (zip.entry().isDirectory()) {
+                if (!config.getSuppressDirectoryCreation()) {
+                    zip.file().mkdirs();
+                }
+                return null;
+            } else if (config.unzipRootFilesLast() && zip.path().getNameCount() == 1) {
+                return factory.getOutputStream(saveForLast(zip.file()));
+            } else {
+                if (!config.getSuppressDirectoryCreation()) {
+                    File parent = zip.file().getParentFile();
+                    if (!parent.exists()) {
+                        parent.mkdirs();
+                    } else if (!parent.isDirectory()) {
+                        throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
+                    }
+                }
+                return factory.getOutputStream(zip.file());
+            }
+        }
+        public File saveForLast(File file) throws IOException {
+            if (tempdir == null) {
+                for (int tries=0; tempdir==null && tries<10; tries++) {
+                    String test = root+"/"+Paths.get("."+UUID.randomUUID().toString());
+                    File testfile = factory.getFile(test);
+                    if (!testfile.exists() && testfile.mkdir()) {
+                        tempdir = test;
+                    }
+                }
+                if (tempdir == null) {
+                    throw new IOException("failed to create holding directory for Unzip Root Files Last option");
+                }
+            }
+            File temp = factory.getFile(tempdir, Paths.get(file.getName()));
+            logger.debug("saving "+temp.getPath());
+            return temp;
+        }
+        public void finish() throws IOException {
+            if (tempdir != null) {
+                File tempdirfile = factory.getFile(tempdir);
+                for (File temp : tempdirfile.listFiles()) {
+                    File target = factory.getFile(root, Paths.get(temp.getName()));
+                    temp.renameTo(target);
+                    logger.debug("restoring "+temp.getName()+" to "+target.getPath());
+                }
+                if (tempdirfile.list().length != 0) {
+                    throw new IOException("failed to rename all files from holding directory: "+tempdir);
+                }
+                tempdirfile.delete();
+            }
+        }
+    }
+
     @Command(name = PUT, options = { Delete })
     public ConnectorCommandResult put(PutCommand put) throws ConnectorException, IOException {
         IConnectorOutgoing source = put.getSource();
@@ -145,28 +209,14 @@ public class ZipConnectorClient extends ConnectorClient {
 
         factory.setSourceAndDest(put.getSource().getName(), put.getDestination().getPath(), MacroUtil.DEST_FILE, logger);
 
+        UnZipProcessor processor = null;
+
         try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> factory.getFile(root+destination, p))) {
             unzip.setFilter(ZipDirectoryOutputStream.excluding(config.getExclusions()));
             switch (config.getUnzipMode()) {
             case unzip:
-                unzip.setProcessor(zip -> {
-                    if (zip.entry().isDirectory()) {
-                        if (!config.getSuppressDirectoryCreation()) {
-                            zip.file().mkdirs();
-                        }
-                        return null;
-                    } else {
-                        if (!config.getSuppressDirectoryCreation()) {
-                            File parent = zip.file().getParentFile();
-                            if (!parent.exists()) {
-                                parent.mkdirs();
-                            } else if (!parent.isDirectory()) {
-                                throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
-                            }
-                        }
-                        return factory.getOutputStream(zip.file());
-                    }
-                });
+                processor = this.new UnZipProcessor(root+destination);
+                unzip.setProcessor(processor);
                 break;
             case log:
                 unzip.setProcessor(zip -> {
@@ -216,6 +266,9 @@ public class ZipConnectorClient extends ConnectorClient {
                 break;
             }
             transfer(source.getStream(), unzip, false);
+            if (processor != null) {
+                processor.finish();
+            }
             logger.debug(("unzip complete. buffer length="+unzip.getBufferLength()));
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {

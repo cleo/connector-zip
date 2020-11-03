@@ -17,6 +17,7 @@ Compression Level | The zip compression level | `none`, `1`-`9`, or `default` | 
 Dont Zip Empty Directories | Select to skip empty directories while zipping | on or off | off
 Unzip Mode | Normal unzip, or log or preflight test options | `unzip`, `log` or `preflight` | `unzip`
 Suppress Directory Creation | Unzip files, but don't create directories | on or off | off
+Unzip Root Files Last | Save top-level files in a temporary folder until the end | on or off | off
 
 ### Unzip Modes and Preflight
 
@@ -41,6 +42,10 @@ rc;
 ### Unzip and Cloud Storage
 
 Cloud storage infrastructures such as Amazon S3, Azure Blob Storage or Google Cloud Storage are keyed object stores that simulate a folder hierarchy with naming conventions and zero-byte objects. Select the _Suppress Directory Creation_ option to prevent the creation of folders while unzipping.
+
+### Unzip and Folder Monitors
+
+In many cases the zip archive represents a folder structure of files that, when unzipped, will be processed by an external system. When the files in subfolders are understood to be attachments to a larger transaction whose index files are in the top level of the archive, it is important that the subfolders be unzipped first and the top level files last. Select the _Unzip Root Files Last_ option to have top level files stored in a temporary subfolder of the target directory (it will be given a name based on a GUID like `.ee0eabd6-f3aa-491c-a30a-35b09b835f95`) until the zip file is completely unzipped, at which time the top level files will be moved from the temporary subfolder to the top level and the temporary folder will be removed.
 
 ## Using Zip Connector Commands ##
 
