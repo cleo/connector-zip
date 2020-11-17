@@ -83,10 +83,20 @@ public class LambdaWriterInputStream extends InputStream {
 
     @Override
     public long skip(long n) throws IOException {
-        long k = Math.min(Math.max(n, 0), (long) length);
-        offset += k;
-        length -= k;
-        return k;
+        if (n <= 0) {
+            return 0;
+        }
+        long skipped = 0;
+        for (;;) {
+            long k = Math.min(n-skipped, (long)length);
+            offset += k;
+            length -= k;
+            skipped += k;
+            if (skipped==n || closed) {
+                return skipped;
+            }
+            need(1);
+        }
     }
 
     public java.io.OutputStream getOutputStream() {

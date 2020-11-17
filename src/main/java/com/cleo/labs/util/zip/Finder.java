@@ -6,6 +6,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.Iterator;
@@ -22,45 +23,68 @@ public class Finder implements Iterator<Finder.Found> {
         public String[] path;
         public File file;
         public boolean directory;
+        public int depth;
+        public int index;
         public String fullname;
-        public Found(String[] path, File file, boolean directory) {
+        public Found(String[] path, File file, boolean directory, int depth, int index) {
             this.path = path;
             this.file = file;
             this.directory = directory;
+            this.depth = depth;
+            this.index = index;
             this.fullname = SLASH.join(path);
             if (directory) {
                 this.fullname += '/';
             }
         }
+        public Found child(File child, int index) {
+            String[] childpath = Arrays.copyOf(this.path, this.path.length+1);
+            childpath[childpath.length-1] = child.getName();
+            return new Found(childpath, child, child.isDirectory(), this.depth+1, index);
+        }
     }
 
+    private boolean started;
     private Deque<Found> stack;
-    private Predicate<Found> filter;
     private Found peeked;
+    private Deque<Found> pendingDirectories;
+    private ArrayList<Found> state;
+    private int count;
 
+    private File root;
+    private Predicate<Found> filter;
     public enum DirectoryMode {include, exclude, excludeEmpty};
     private DirectoryMode directoryMode;
-    private Deque<Found> pendingDirectories;
-
-    private Found child(Found dir, File child, boolean directory) {
-        String[] path = Arrays.copyOf(dir.path, dir.path.length+1);
-        path[path.length-1] = child.getName();
-        return new Found(path, child, directory);
-    }
+    private int[] restart;
+    private int limit;
 
     private void push(Found dir) {
+        // keep track of the state stack, where to pick up next
+        if (dir.depth >= 0) {
+            while (state.size() > dir.depth) {
+                state.remove(state.size()-1);
+            }
+            state.add(dir);
+        }
+        // if it's a directory, push more onto the todo stack
         if (dir.directory && filter.test(dir)) {
             File[] files = dir.file.listFiles();
-            Stream.of(files)
-                .filter(f -> !f.isDirectory())
-                .map(f -> child(dir, f, false))
-                .filter(filter)
-                .forEach(stack::push);
-            Stream.of(files)
-                .filter(File::isDirectory)
-                .map(f -> child(dir, f, true))
-                .filter(filter)
-                .forEach(stack::push);
+            // this is a reverse sort: files < directories, otherwise -compare
+            Arrays.sort(files, (a,b) -> a.isDirectory()==b.isDirectory()
+                    ? -a.getName().compareTo(b.getName())
+                    : a.isDirectory() ? 1 : -1);
+            // now push them, which reverses them back to directories < files
+            int stop = files.length;
+            if (dir.depth < restart.length-1) {
+                stop -= restart[dir.depth+1];
+                restart[dir.depth+1] = 0;
+            }
+            for (int i=0; i<stop; i++) {
+                Found f = dir.child(files[i], files.length-1-i);
+                if (filter.test(f)) {
+                    stack.push(f);
+                }
+            }
         }
     }
 
@@ -93,15 +117,64 @@ public class Finder implements Iterator<Finder.Found> {
                 next = null;
             }
         }
+        if (next == null && stack.isEmpty()) {
+            state.clear();
+        }
         peeked = next;
     }
 
-    public Finder(File root, Predicate<Found> filter, DirectoryMode directoryMode) {
+    public Finder(File root) {
+        this.root = root;
+        this.filter = ALL;
+        this.directoryMode = DirectoryMode.include;
+
         this.stack = new ArrayDeque<>();
-        this.filter = filter;
-        this.directoryMode = directoryMode;
         this.pendingDirectories = new ArrayDeque<>();
-        Found start = new Found(new String[0], root, root.isDirectory());
+        this.state = new ArrayList<>();
+        this.restart = new int[0];
+        this.limit = 0;
+        this.count = 0;
+    }
+
+    public Finder filter(Predicate<Found> filter) {
+        if (started) {
+            throw new IllegalStateException("Finder is iterating -- can't set filter");
+        }
+        this.filter = filter;
+        return this;
+    }
+
+    public Finder directoryMode(DirectoryMode directoryMode) {
+        if (started) {
+            throw new IllegalStateException("Finder is iterating -- can't set directoryMode");
+        }
+        this.directoryMode = directoryMode;
+        return this;
+    }
+
+    public Finder restart(int[] restart) {
+        if (started) {
+            throw new IllegalStateException("Finder is iterating -- can't set restart");
+        }
+        this.restart = restart==null ? new int[0] : restart.clone();
+        return this;
+    }
+
+    public Finder limit(int limit) {
+        this.limit = limit;
+        if (count >= limit) {
+            peeked = null;
+        }
+        return this;
+    }
+
+    public int count() {
+        return count;
+    }
+
+    private void start() {
+        started = true;
+        Found start = new Found(new String[0], root, root.isDirectory(), -1, 0);
         if (start.directory) {
             push(start);
         } else {
@@ -110,24 +183,34 @@ public class Finder implements Iterator<Finder.Found> {
         peek();
     }
 
-    public Finder(File root, Predicate<Found> filter) {
-        this(root, filter, DirectoryMode.include);
-    }
-
-    public Finder(File root) {
-        this(root, ALL);
-    }
-
     @Override
     public boolean hasNext() {
+        if (!started) {
+            start();
+        }
         return peeked != null;
     }
 
     @Override
     public Found next() {
         Found result = peeked;
-        peek();
+        if (result != null) {
+            count++;
+            if (limit > 0 && count >= limit) {
+                peeked = null;
+            } else {
+                peek();
+            }
+        }
         return result;
+    }
+
+    public int[] checkpoint() {
+        int[] indices = new int[state.size()];
+        for (int i=0; i<state.size(); i++) {
+            indices[i] = state.get(i).index;
+        }
+        return indices;
     }
 
     public static Predicate<Found> ALL = found->true;

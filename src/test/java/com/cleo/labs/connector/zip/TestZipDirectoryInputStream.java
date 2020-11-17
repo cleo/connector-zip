@@ -88,6 +88,8 @@ public class TestZipDirectoryInputStream {
                 .build()) {
             totalSize = zip.getTotalSize();
             System.out.println("totalSize="+totalSize);
+            assertTrue(zip.isTotalSizeCalculatedYet());
+            assertEquals(totalSize, zip.getTotalSize());
         }
         try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
                 .opener(f -> { return new FileInputStream(f.file); })

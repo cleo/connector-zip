@@ -14,10 +14,31 @@ Property | Description | Value | Default
 ---------|-------------|-------|--------
 Root Path | The directory to zip on `GET` or in which to unzip on `PUT` | A directory path | Unspecified
 Compression Level | The zip compression level | `none`, `1`-`9`, or `default` | `default`
+Exclusions | A list of file/path patterns to exclude from zipping and unzipping | A table of exclusion patterns | none
 Dont Zip Empty Directories | Select to skip empty directories while zipping | on or off | off
+Zip Size Threshold | Set to split large zip files into parts when the size threshold is crossed | a numeric value followed by `k`, `m`, `g`, or `t`, or `0` for unlimited | `0`
 Unzip Mode | Normal unzip, or log or preflight test options | `unzip`, `log` or `preflight` | `unzip`
 Suppress Directory Creation | Unzip files, but don't create directories | on or off | off
 Unzip Root Files Last | Save top-level files in a temporary folder until the end | on or off | off
+
+### Exclusions
+
+Use exclusions to prevent files or directories from being included in a zip file during a zip operation, or to prevent files in the zip archive from being unzipped. The exclusion list is managed as a table of Exclusion Pattern. Both regular expression (`regex`) and wildcard (`glob`) patterns are supported. See the Java [getPathMatcher](https://docs.oracle.com/javase/8/docs/api/java/nio/file/FileSystem.html#getPathMatcher-java.lang.String-) documentation for more details.
+
+Note that while zipping, if you exclude a directory then all files in that directory will be excluded. Since zip files are not required to be organized by directory, each entry is filtered on its own&mdash;to exclude an entire directory while unzipping, include a pattern that explicitly excludes the directory contents. For example, to exclude the `.hidden` directory and all its contents:
+
+* zip exclusion: `glob:.hidden`
+* unzip exclusion: `glob:.hidden{,/*}`
+
+### Zip Thresholds
+
+The zip connector is configured with a _Root Path_ that points to the directory of files to be zipped. It creates a projection of the entire directory as a synthetic directory consisting of one or more zip archives containing the (possibly filtered) contents of the entire _Root Path_.
+
+By default when zipping the zip connector creates a single zip archive, so the projected directory consists of a single zip file (if you run a `DIR *` command, you will see a single file named `part1-code.zip`, where `code` is a sequence of characters encoding the file's size and number of entries).
+
+If you wish to partition a large archive into pieces, you can set the _Zip Size Threshold_ to a byte size. If the connector detects that a zip archive has reached the threshold, it will finish adding the current file and will then close the file and stop zipping, leaving the remaining files for subsequent zip archives. The projected directory will then contain a set of files named `partn-code.zip`, where `n` cycles from `1` to the number of parts, and the `code` for each file encodes the file's size, number of entries, and the starting point in the _Root Path_ tree where this partition begins.
+
+With or without thresholding, a `GET *` command will retrieve the entire contents of _Root Path_ compressed into some number of zip archives. Unlike multi-part zip archives, each `partn-code.zip` file is a complete stand-alone zip archive that can be individually unzipped indepenently from the other parts. If you unzip the entire set of partitions, the entire _Root Path_ directory will be faithfully reconstructed.
 
 ### Unzip Modes and Preflight
 

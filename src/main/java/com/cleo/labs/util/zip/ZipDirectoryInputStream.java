@@ -6,7 +6,6 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Iterator;
 import java.util.function.Predicate;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -25,7 +24,12 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     private File path;
     private Opener opener;
     private int level;
-    private Iterator<Found> files;
+    private Predicate<Found> filter;
+    private int[] restart;
+    private int limit;
+
+    private DirectoryMode directoryMode;
+    private Finder files;
     private OutputStream output;
     private LambdaWriterInputStream input;
     private ZipOutputStream zip;
@@ -34,11 +38,15 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     private byte[] buffer;
     private long currentSize;
     private long totalSize;
-    private Predicate<Found> filter;
-    private DirectoryMode directoryMode;
 
     private void setup() throws IOException {
-        this.files = new Finder(path, filter, directoryMode);
+        this.files = new Finder(path).filter(filter).directoryMode(directoryMode);
+        if (limit > 0) {
+            this.files.limit(limit);
+        }
+        if (restart != null && restart.length>0) {
+            this.files.restart(restart);
+        }
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
@@ -51,14 +59,16 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     }
 
     public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
-        this(path, opener, Deflater.DEFAULT_COMPRESSION, null, null);
+        this(path, opener, Deflater.DEFAULT_COMPRESSION, null, null, null, 0);
     }
 
     public ZipDirectoryInputStream(File path,
             Opener opener,
             int level,
             Predicate<Found> filter,
-            DirectoryMode directoryMode) throws IOException {
+            DirectoryMode directoryMode,
+            int[] restart,
+            int limit) throws IOException {
         super(null);
         this.path = path;
         this.opener = opener;
@@ -67,6 +77,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.totalSize = -1L;
         this.filter = filter==null ? Finder.ALL : filter;
         this.directoryMode = directoryMode==null ? DirectoryMode.include : directoryMode;
+        this.restart = restart;
+        this.limit = limit;
         setup();
     }
 
@@ -76,6 +88,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         private int level = Deflater.DEFAULT_COMPRESSION;
         private Predicate<Found> filter = Finder.ALL;
         private DirectoryMode directoryMode = DirectoryMode.include;
+        private int[] restart = null;
+        private int limit = 0;
         public Builder(File path) {
             this.path = path;
         }
@@ -95,13 +109,34 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             this.directoryMode = directoryMode;
             return this;
         }
+        public Builder restart(int[] restart) {
+            this.restart = restart;
+            return this;
+        }
+        public Builder limit(int limit) {
+            this.limit = limit;
+            return this;
+        }
         public ZipDirectoryInputStream build() throws IOException {
-            return new ZipDirectoryInputStream(path, opener, level, filter, directoryMode);
+            return new ZipDirectoryInputStream(path, opener, level, filter, directoryMode, restart, limit);
         }
     }
 
     public static Builder builder(File path) {
         return new Builder(path);
+    }
+
+    public ZipDirectoryInputStream limit(int limit) {
+        files.limit(limit);
+        return this;
+    }
+
+    public int count() {
+        return files.count();
+    }
+
+    public int[] checkpoint() {
+        return files.checkpoint();
     }
 
     public long getTotalSize() throws IOException {

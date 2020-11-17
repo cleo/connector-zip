@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.cleo.labs.util.zip.LambdaWriterInputStream;
@@ -43,6 +44,7 @@ public class TestLambdaWriterInputStream {
         return new String(b, 0, n);
     }
 
+    @Ignore
     @Test
     public void test() throws IOException {
         LambdaWriterInputStream cos = new LambdaWriterInputStream(new TestWriter(8), 20);
