@@ -15,7 +15,7 @@ import java.util.stream.Stream;
 
 import com.google.common.base.Joiner;
 
-public class Finder implements Iterator<Finder.Found> {
+public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
 
     private static final Joiner SLASH = Joiner.on('/');
 
@@ -241,6 +241,11 @@ public class Finder implements Iterator<Finder.Found> {
         }
         return f->f.directory || Stream.of(matchers)
             .anyMatch(m -> m.matches(Paths.get("", f.path)));
+    }
+
+    @Override
+    public Iterator<Found> iterator() {
+        return this;
     }
 
 }

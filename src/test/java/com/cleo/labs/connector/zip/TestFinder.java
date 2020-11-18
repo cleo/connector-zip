@@ -13,6 +13,7 @@ import org.junit.Test;
 
 import com.cleo.labs.util.zip.Finder;
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
+import com.google.common.collect.Iterables;
 
 public class TestFinder {
 
@@ -62,15 +63,11 @@ public class TestFinder {
     public void testLimit() throws IOException {
         int limit = 17;
         Path root = Paths.get(".");
-        Path abs = root.toAbsolutePath();
-        //System.out.println("absolute="+abs);
         Finder files = new Finder(root.toFile())
                 .filter(Finder.excluding("glob:.*", "glob:target"))
                 .directoryMode(DirectoryMode.excludeEmpty)
                 .limit(limit);
-        int[] count = new int[] {0};
-        files.forEachRemaining(f->count[0]++);
-        assertEquals(limit, count[0]);
+        assertEquals(limit, Iterables.size(files));
     }
 
     @Test
