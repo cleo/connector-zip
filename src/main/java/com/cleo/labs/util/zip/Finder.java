@@ -42,11 +42,15 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
             childpath[childpath.length-1] = child.getName();
             return new Found(childpath, child, child.isDirectory(), this.depth+1, index);
         }
+        public Found child(File child) {
+            return child(child, 0);
+        }
     }
 
     private boolean started;
     private Deque<Found> stack;
     private Found peeked;
+    private Found hold;
     private Deque<Found> pendingDirectories;
     private ArrayList<Found> state;
     private int count;
@@ -69,21 +73,23 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
         // if it's a directory, push more onto the todo stack
         if (dir.directory && filter.test(dir)) {
             File[] files = dir.file.listFiles();
-            // this is a reverse sort: files < directories, otherwise -compare
-            Arrays.sort(files, (a,b) -> a.isDirectory()==b.isDirectory()
-                    ? -a.getName().compareTo(b.getName())
-                    : a.isDirectory() ? 1 : -1);
+            Found[] found = Stream.of(files)
+                    .map(dir::child)
+                    .filter(filter)
+                    // this is a reverse sort: files < directories, otherwise -compare
+                    .sorted((a,b) -> a.directory==b.directory
+                        ? -a.fullname.compareTo(b.fullname)
+                        : a.directory ? 1 : -1)
+                    .toArray(Found[]::new);
             // now push them, which reverses them back to directories < files
-            int stop = files.length;
+            int stop = found.length;
             if (dir.depth < restart.length-1) {
                 stop -= restart[dir.depth+1];
                 restart[dir.depth+1] = 0;
             }
             for (int i=0; i<stop; i++) {
-                Found f = dir.child(files[i], files.length-1-i);
-                if (filter.test(f)) {
-                    stack.push(f);
-                }
+                found[i].index = found.length-1-i;
+                stack.push(found[i]);
             }
         }
     }
@@ -129,6 +135,7 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
         this.directoryMode = DirectoryMode.include;
 
         this.stack = new ArrayDeque<>();
+        this.hold = null;
         this.pendingDirectories = new ArrayDeque<>();
         this.state = new ArrayList<>();
         this.restart = new int[0];
@@ -162,10 +169,20 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
 
     public Finder limit(int limit) {
         this.limit = limit;
-        if (count >= limit) {
-            peeked = null;
-        }
         return this;
+    }
+
+    public void hold() {
+        this.limit = count;
+        hold = peeked;
+        peeked = null;
+    }
+
+    public void unhold() {
+        this.limit = 0;
+        this.count = 0;
+        peeked = hold;
+        hold = null;
     }
 
     public int count() {

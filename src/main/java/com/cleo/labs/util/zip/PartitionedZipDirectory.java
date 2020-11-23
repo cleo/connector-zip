@@ -117,6 +117,7 @@ public class PartitionedZipDirectory {
     public List<Partition> partitions() throws IOException {
         List<Partition> partitions = new ArrayList<>();
         int[] checkpoint = new int[0];
+        Finder finder = null;
         do {
             ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(path)
                     .opener(opener)
@@ -124,16 +125,18 @@ public class PartitionedZipDirectory {
                     .filter(filter)
                     .directoryMode(directoryMode)
                     .restart(checkpoint)
+                    .finder(finder)
                     .build();
             InputStream in = zip;
             if (threshold > 0) {
                 in = ByteStreams.limit(in, threshold);
             }
             long size = ByteStreams.exhaust(in);
-            zip.limit(zip.count());
+            zip.hold();
             size += ByteStreams.exhaust(zip);
             partitions.add(new Partition(size, zip.count(), checkpoint));
             checkpoint = zip.checkpoint();
+            finder = zip.finder();
             zip.close();
         } while (checkpoint.length > 0);
         return partitions;

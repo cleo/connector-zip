@@ -21,6 +21,7 @@ public class TestFinder {
     @Test
     public void test() throws IOException {
         Path root = Paths.get(".");
+        root = Paths.get(System.getProperty("user.home"),"d/vagrant/cache/zip");
         Path abs = root.toAbsolutePath();
         int limit = 0;
         System.out.println("absolute="+abs);
@@ -30,9 +31,8 @@ public class TestFinder {
                 .directoryMode(DirectoryMode.excludeEmpty);
         //Iterator<Finder.Found> files = new Finder(root.toFile(), Finder.including("glob:**.java"), DirectoryMode.excludeEmpty);
         int count = 0;
-        while (files.hasNext()) {
+        for (Finder.Found f : files) {
             count++;
-            Finder.Found f = files.next();
             System.out.println(String.format("%d: %d.%d %s %s", count, f.depth, f.index, Arrays.toString(files.checkpoint()), f.fullname));
         }
         assertTrue(true);

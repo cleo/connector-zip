@@ -70,19 +70,14 @@ In many cases the zip archive represents a folder structure of files that, when 
 
 ## Using Zip Connector Commands ##
 
-In addition to `GET` and `PUT`, the connector supports the `DIR` command, which allows things like `GET *` to work properly. Directory listing starts at the root path, and the true contents of the directory are listed with the following alterations:
+In addition to `GET` and `PUT`, the connector supports the `DIR` command, which allows `GET *` to work properly. The `DIR` command:
 
-* only directories are listed, allowing the directory structure under the root path to be navigated, and
-* a pseudo-file `directory.zip` is listed in every directory and sub-directory.
+* appends any path in the `DIR` command to the configured _Root Path_ and uses this as the target directory to be zipped,
+* zips (and discards) the entire target directory, measuring the number of files and total zipped size encountered, breaking the zip into chunks if a _Zip Size Threshold_ is configured,
+* constructs a set of encoded file names named `partn-code.zip`, where `n` is a number from `1` to the number of parts, and `code` is a sequence of characters encoding the size of the part, the number of zip entries it contains, and where in the target directory to start zipping,
+* returns the set of `partn-code.zip` file names as the contents of the target directory.
 
-When processing a command `GET path/file`, the connector ignores the `file` name, but starts zipping at the `path` subpath from the root path. So:
-
-Command | Result
---------|-------
-`GET directory.zip` | a zip file `directory.zip` containing all files in the root path is placed in the inbox
-`GET dir/foo.zip` | a zip file `foo.zip` containing all files in the `dir` subfolder is placed in the inbox
-`GET *` | the same as `GET directory.zip`
-`GET * /path/allfiles.zip` | a zip file `allfiles.zip` contianing all files in the root path is placed at `/path`
+Only file names matching the `partn-code.zip` format in a `GET` request will be processed&mdash;any other file name will be _not found_.
 
 When processing a command `PUT path/file`, the behavior is similar in that the `file` name is discarded, but the `path` is processed as a subfolder of the root path. If `path` does not exist, the `PUT` command will create it (and all subfolders based on the contents of the file being unzipped) as needed.
 
@@ -96,11 +91,6 @@ In a directory context (like inbox or outbox) use the syntax:
 
 * `zip:alias` to refer to zip from/unzip to the root path
 * `zip:alias/folder/` to refer to zip from/unzip to a subfolder of the root path
-
-In a specific file context (like `PUT`, `GET` or `LCOPY` of a single file) use the syntax:
-
-* `zip:alias/file.zip` to refer to the root path as a file named `file.zip`
-* `zip:alias/folder/file.zip` to add a subfolder
 
 When using the zip connector as a URI, keep in mind that the URI mechanism depends on the standard `send` and `receive` actions that were created when you initially activated the connection:
 

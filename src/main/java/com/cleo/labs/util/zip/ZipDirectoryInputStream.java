@@ -21,15 +21,11 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         public InputStream open(Found file) throws IOException;
     }
 
-    private File path;
+    private Finder finder;
+    private int limit;
     private Opener opener;
     private int level;
-    private Predicate<Found> filter;
-    private int[] restart;
-    private int limit;
 
-    private DirectoryMode directoryMode;
-    private Finder files;
     private OutputStream output;
     private LambdaWriterInputStream input;
     private ZipOutputStream zip;
@@ -40,13 +36,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     private long totalSize;
 
     private void setup() throws IOException {
-        this.files = new Finder(path).filter(filter).directoryMode(directoryMode);
-        if (limit > 0) {
-            this.files.limit(limit);
-        }
-        if (restart != null && restart.length>0) {
-            this.files.restart(restart);
-        }
+        finder.unhold();
+        finder.limit(limit);
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
@@ -58,27 +49,34 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.currentSize = 0L;
     }
 
-    public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
-        this(path, opener, Deflater.DEFAULT_COMPRESSION, null, null, null, 0);
+    private static Finder setupFinder(File path, Predicate<Found> filter, DirectoryMode directoryMode, int[] restart) {
+        if (filter == null) {
+            filter = Finder.ALL;
+        }
+        if (directoryMode == null) {
+            directoryMode = DirectoryMode.include;
+        }
+        Finder finder = new Finder(path).filter(filter).directoryMode(directoryMode);
+        if (restart != null && restart.length>0) {
+            finder.restart(restart);
+        }
+        return finder;
     }
 
-    public ZipDirectoryInputStream(File path,
-            Opener opener,
-            int level,
-            Predicate<Found> filter,
-            DirectoryMode directoryMode,
-            int[] restart,
-            int limit) throws IOException {
+    /*
+    public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
+        this(setupFinder(path, Finder.ALL, null, 0, null), opener, Deflater.DEFAULT_COMPRESSION);
+    }
+    */
+
+    public ZipDirectoryInputStream(Finder finder, int limit, Opener opener, int level) throws IOException {
         super(null);
-        this.path = path;
+        this.finder = finder;
+        this.limit = limit;
         this.opener = opener;
         this.level = level;
         this.buffer = new byte[LambdaWriterInputStream.DEFAULT_BUFFERSIZE];
         this.totalSize = -1L;
-        this.filter = filter==null ? Finder.ALL : filter;
-        this.directoryMode = directoryMode==null ? DirectoryMode.include : directoryMode;
-        this.restart = restart;
-        this.limit = limit;
         setup();
     }
 
@@ -86,6 +84,7 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         private File path = null;
         private Opener opener = f -> new ByteArrayInputStream(new byte[0]);
         private int level = Deflater.DEFAULT_COMPRESSION;
+        private Finder finder = null;
         private Predicate<Found> filter = Finder.ALL;
         private DirectoryMode directoryMode = DirectoryMode.include;
         private int[] restart = null;
@@ -99,6 +98,10 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         }
         public Builder level(int level) {
             this.level = level;
+            return this;
+        }
+        public Builder finder(Finder finder) {
+            this.finder = finder;
             return this;
         }
         public Builder filter(Predicate<Found> filter) {
@@ -118,7 +121,10 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             return this;
         }
         public ZipDirectoryInputStream build() throws IOException {
-            return new ZipDirectoryInputStream(path, opener, level, filter, directoryMode, restart, limit);
+            if (finder == null) {
+                finder = setupFinder(path, filter, directoryMode, restart);
+            }
+            return new ZipDirectoryInputStream(finder, limit, opener, level);
         }
     }
 
@@ -126,17 +132,21 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         return new Builder(path);
     }
 
-    public ZipDirectoryInputStream limit(int limit) {
-        files.limit(limit);
+    public ZipDirectoryInputStream hold() {
+        finder.hold();
         return this;
     }
 
     public int count() {
-        return files.count();
+        return finder.count();
     }
 
     public int[] checkpoint() {
-        return files.checkpoint();
+        return finder.checkpoint();
+    }
+
+    public Finder finder() {
+        return finder;
     }
 
     public long getTotalSize() throws IOException {
@@ -163,8 +173,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     public void write(OutputStream t) throws IOException {
         if (entry == null) {
             // time to get the next file and set up a new ZipEntry
-            if (files.hasNext()) {
-                Found next = files.next();
+            if (finder.hasNext()) {
+                Found next = finder.next();
                 if (next.directory) {
                     entry = new ZipEntry(next.fullname);
                     entry.setTime(next.file.lastModified());
