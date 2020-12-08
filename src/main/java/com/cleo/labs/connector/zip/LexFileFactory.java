@@ -88,7 +88,9 @@ public class LexFileFactory {
 
     public InputStream getInputStream(File file, int col) throws IOException {
         try {
-            NetworkFilterInputStream nfis = new NetworkFilterInputStream(LexIO.getFileInputStream((LexFile)file), (LexActionBean) action, false);
+            LexFile lexfile = (LexFile)file;
+            lexfile.setAllowURI(true);
+            NetworkFilterInputStream nfis = new NetworkFilterInputStream(LexIO.getFileInputStream(lexfile), (LexActionBean) action, false);
             nfis.setLogTransfers(false);
             nfis.setNoThrottle();
             return nfis;
@@ -105,7 +107,9 @@ public class LexFileFactory {
 
     public OutputStream getOutputStream(File file) throws IOException {
         try {
-            NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream((LexFile)file), (LexActionBean) action, false);
+            LexFile lexfile = (LexFile)file;
+            lexfile.setAllowURI(true);
+            NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream(lexfile), (LexActionBean) action, false);
             nfos.setLogTransfers(false);
             nfos.setNoThrottle();
             return nfos;
