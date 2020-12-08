@@ -65,7 +65,7 @@ public class ZipConnectorClient extends ConnectorClient {
      * @return a cleaned up directory name
      */
     private String asDirectory(String dir) {
-        return dir.replace('\\', '/').replaceFirst("(?<!/)$", "/");
+        return dir.replaceFirst("(?<![/\\\\])$", "/");
     }
     /**
      * Strips off any leading root indicator: a drive-letter: and/or leading \ or /.
@@ -83,7 +83,7 @@ public class ZipConnectorClient extends ConnectorClient {
      * @return the (possibly empty, but if not ending in /) path prefix
      */
     private String justDirectory(String file) {
-        return file.replace('\\', '/').replaceFirst("(?:^|(?<=/))[^/]+/?$", "");
+        return file.replaceFirst("(?:^|(?<=[/\\\\]))[^/\\\\]+[/\\\\]?$", "");
     }
 
     @Command(name=DIR)
