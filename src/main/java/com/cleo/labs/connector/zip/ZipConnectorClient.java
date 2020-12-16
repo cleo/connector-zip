@@ -28,7 +28,6 @@ import com.cleo.connector.api.directory.Entry;
 import com.cleo.connector.api.interfaces.IConnectorConfig;
 import com.cleo.connector.api.interfaces.IConnectorIncoming;
 import com.cleo.connector.api.interfaces.IConnectorOutgoing;
-import com.cleo.connector.file.FileAttributes;
 import com.cleo.connector.shell.interfaces.IConnector;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
 import com.cleo.labs.util.zip.Finder;
