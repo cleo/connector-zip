@@ -143,8 +143,18 @@ public class ZipConnectorClient extends ConnectorClient {
                     ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
             }
         } else {
-            throw new ConnectorException(String.format("'%s' does not exist or is not accessible", sourceFile),
-                ConnectorException.Category.fileNonExistentOrNoAccess);
+            try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
+                    .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
+                    .level(config.getCompressionLevel())
+                    .filter(Finder.excluding(config.getExclusions()))
+                    .directoryMode(config.getDirectoryMode())
+                    .build()) {
+                transfer(zip, destination.getStream(), true);
+                return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
+            } catch (IOException ioe) {
+                throw new ConnectorException(String.format("'%s' does not exist or is not accessible", sourceFile),
+                    ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
+            }
         }
     }
 
@@ -298,15 +308,21 @@ public class ZipConnectorClient extends ConnectorClient {
     public BasicFileAttributeView getAttributes(String path) throws ConnectorException, IOException {
         logger.debug(String.format("ATTR '%s'", path));
         String root = asDirectory(config.getRootPath());
-        String filename = root + stripRoot(path);
+        String sourceDir = justDirectory(path);
+        String sourceFile = stripRoot(path);
+
         factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, logger);
-        File file = factory.getFile(filename);
+        File file = factory.getFile(root+sourceFile);
         ZipFilenameEncoder encoder = new ZipFilenameEncoder();
         Partition partition = encoder.parseFilename(file.getName());
+
         if (partition != null) {
             return new ZipFileAttributes(file.getName(), partition);
-        } else if (file.exists() && file.isDirectory()) {
-            return new FileAttributes(file);
+        } else {
+            File dir = factory.getFile(root+sourceDir);
+            if (dir.exists() && dir.isDirectory()) {
+                return new ZipFileAttributes(file.getName(), null);
+            }
         }
         throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path),
                 ConnectorException.Category.fileNonExistentOrNoAccess);

@@ -59,7 +59,7 @@ public class ZipFileAttributes implements DosFileAttributes, DosFileAttributeVie
 
     @Override
     public long size() {
-        return partition.size();
+        return partition == null ? -1L : partition.size();
     }
 
     @Override
