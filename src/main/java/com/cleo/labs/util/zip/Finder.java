@@ -45,6 +45,10 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
         public Found child(File child) {
             return child(child, 0);
         }
+        @Override
+        public String toString() {
+            return fullname+"(d="+depth+",i="+index+")";
+        }
     }
 
     private boolean started;
@@ -100,15 +104,15 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
             // see if we need to report out a pendingDirectory
             if (!pendingDirectories.isEmpty()) {
                 Found peek = stack.peek();
-                if (peek.directory) {
-                    // if we are peeking at a directory, throw out already bypassed parents
-                    while (!pendingDirectories.isEmpty() &&
-                        !peek.fullname.startsWith(pendingDirectories.peekLast().fullname)) {
-                        pendingDirectories.removeLast();
-                    }
-                } else {
+                // throw out already bypassed parents
+                while (!pendingDirectories.isEmpty() &&
+                    !peek.fullname.startsWith(pendingDirectories.peekLast().fullname)) {
+                    // pendingDirectories.peekLast() doesn't enclose peek so remove it
+                    pendingDirectories.removeLast();
+                }
+                if (!peek.directory && !pendingDirectories.isEmpty()) {
                     // if we are peeking at a file, short-circuit the stack while we report out the parents
-                    peeked = pendingDirectories.pollFirst(); // not null -- already know !isEmpty
+                    peeked = pendingDirectories.pollFirst();
                     return;
                 }
             }
@@ -258,6 +262,14 @@ public class Finder implements Iterator<Finder.Found>, Iterable<Finder.Found> {
         }
         return f->f.directory || Stream.of(matchers)
             .anyMatch(m -> m.matches(Paths.get("", f.path)));
+    }
+
+    public static Predicate<Found> only(String pattern) {
+        if (pattern==null || pattern.isEmpty()) {
+            return ALL;
+        }
+        PathMatcher matcher = FileSystems.getDefault().getPathMatcher(pattern);
+        return f->f.directory || matcher.matches(Paths.get("", f.path));
     }
 
     @Override

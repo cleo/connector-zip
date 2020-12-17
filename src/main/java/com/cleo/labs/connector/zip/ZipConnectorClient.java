@@ -130,7 +130,8 @@ public class ZipConnectorClient extends ConnectorClient {
             try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
                     .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
                     .level(config.getCompressionLevel())
-                    .filter(Finder.excluding(config.getExclusions()))
+                    .filter(Finder.excluding(config.getExclusions())
+                            .and(Finder.only(config.getSelect())))
                     .directoryMode(config.getDirectoryMode())
                     .restart(partition.checkpoint())
                     .limit(partition.count())
@@ -145,7 +146,8 @@ public class ZipConnectorClient extends ConnectorClient {
             try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
                     .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
                     .level(config.getCompressionLevel())
-                    .filter(Finder.excluding(config.getExclusions()))
+                    .filter(Finder.excluding(config.getExclusions())
+                            .and(Finder.only(config.getSelect())))
                     .directoryMode(config.getDirectoryMode())
                     .build()) {
                 transfer(zip, destination.getStream(), true);

@@ -93,6 +93,23 @@ public class ZipConnectorConfig {
         }
     }
 
+    private static String globByDefault(String pattern) {
+        if (pattern==null || pattern.isEmpty()) {
+            return null;
+        } else if (!pattern.startsWith("regex:") && !pattern.startsWith("glob:")) {
+            pattern = "glob:"+pattern;
+        }
+        return pattern;
+    }
+
+    public String getSelect() {
+        try {
+            return globByDefault(schema.select.getValue(client));
+        } catch (ConnectorPropertyException e) {
+            return null;
+        }
+    }
+
     public String[] getExclusions() {
         try {
             String value = schema.exclusions.getValue(client);
@@ -100,6 +117,7 @@ public class ZipConnectorConfig {
             String[] patterns = Stream.of(exclusions)
                     .filter(Exclusion::isEnabled)
                     .map(Exclusion::getExclusionPattern)
+                    .map(ZipConnectorConfig::globByDefault)
                     .toArray(String[]::new);
             return patterns;
         } catch (ConnectorPropertyException e) {
@@ -109,6 +127,12 @@ public class ZipConnectorConfig {
 
     public DirectoryMode getDirectoryMode() {
         try {
+            // when select is provided use excludeEmpty always
+            String select = schema.select.getValue(client);
+            if (select!=null && !select.isEmpty()) {
+                return DirectoryMode.excludeEmpty;
+            }
+            // otherwise obey checkbox
             boolean value = schema.dontZipEmptyDirectories.getValue(client);
             return value ? DirectoryMode.excludeEmpty : DirectoryMode.include;
         } catch (ConnectorPropertyException e) {

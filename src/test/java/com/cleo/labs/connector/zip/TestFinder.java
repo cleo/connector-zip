@@ -21,12 +21,14 @@ public class TestFinder {
     @Test
     public void test() throws IOException {
         Path root = Paths.get(".");
-        root = Paths.get(System.getProperty("user.home"),"d/vagrant/cache/zip");
+        //root = Paths.get(System.getProperty("user.home"),"d/vagrant/cache/zip");
+        root = Paths.get(System.getProperty("user.home"),"d/vagrant/harmony/test");
         Path abs = root.toAbsolutePath();
         int limit = 0;
         System.out.println("absolute="+abs);
         Finder files = new Finder(root.toFile())
                 .filter(Finder.excluding("glob:.*", "glob:target"))
+                //.filter(Finder.excluding("glob:.*", "glob:target", "glob:{**/,}test[2-9]*"))
                 .limit(limit)
                 .directoryMode(DirectoryMode.excludeEmpty);
         //Iterator<Finder.Found> files = new Finder(root.toFile(), Finder.including("glob:**.java"), DirectoryMode.excludeEmpty);
@@ -76,8 +78,8 @@ public class TestFinder {
         assertTrue(files.hasNext());
     }
 
-    @Test
     @Ignore
+    @Test
     public void testIgnore() {
     }
 

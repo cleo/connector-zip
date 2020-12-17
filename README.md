@@ -15,6 +15,7 @@ Property | Description | Value | Default
 Root Path | The directory to zip on `GET` or in which to unzip on `PUT` | A directory path | Unspecified
 Compression Level | The zip compression level | `none`, `1`-`9`, or `default` | `default`
 Exclusions | A list of file/path patterns to exclude from zipping and unzipping | A table of exclusion patterns | none
+Select | A single file/path pattern to include while zipping | A `glob:` or `regex:` pattern | none
 Dont Zip Empty Directories | Select to skip empty directories while zipping | on or off | off
 Zip Size Threshold | Set to split large zip files into parts when the size threshold is crossed | a numeric value followed by `k`, `m`, `g`, or `t`, or `0` for unlimited | `0`
 Unzip Mode | Normal unzip, or log or preflight test options | `unzip`, `log` or `preflight` | `unzip`
@@ -23,12 +24,31 @@ Unzip Root Files Last | Save top-level files in a temporary folder until the end
 
 ### Exclusions
 
-Use exclusions to prevent files or directories from being included in a zip file during a zip operation, or to prevent files in the zip archive from being unzipped. The exclusion list is managed as a table of Exclusion Pattern. Both regular expression (`regex`) and wildcard (`glob`) patterns are supported. See the Java [getPathMatcher](https://docs.oracle.com/javase/8/docs/api/java/nio/file/FileSystem.html#getPathMatcher-java.lang.String-) documentation for more details.
+Use exclusions to prevent files or directories from being included in a zip file during a zip operation, or to prevent files in the zip archive from being unzipped. The exclusion list is managed as a table of Exclusion Pattern. Both regular expression (`regex`) and wildcard (`glob`) patterns are supported. See the Java [getPathMatcher](https://docs.oracle.com/javase/8/docs/api/java/nio/file/FileSystem.html#getPathMatcher-java.lang.String-) documentation for more details. If neither a `glob:` nor a `regex:` prefix is provided, `glob:` is the default.
 
 Note that while zipping, if you exclude a directory then all files in that directory will be excluded. Since zip files are not required to be organized by directory, each entry is filtered on its own&mdash;to exclude an entire directory while unzipping, include a pattern that explicitly excludes the directory contents. For example, to exclude the `.hidden` directory and all its contents:
 
 * zip exclusion: `glob:.hidden`
 * unzip exclusion: `glob:.hidden{,/*}`
+
+### Select
+
+Use a select expression while zipping to include a single file or path name or pattern in the zip file. Both the _Select_ pattern and _Exclusions_ patterns must be satisfied for files to be included (so don't exclude your select pattern).
+
+_Select_ is convenient to use in an action or URI to pick a specific file to zip from a _Root Path_ covered by a Zip connector:
+
+```
+SET Zip.Select=file.txt
+GET file.zip
+```
+
+will create `file.zip` in the inbox containing `file.txt` from _Root Path_, or
+
+```
+LCOPY zip:connection/file.zip?zip.select=file.txt&zip.rootpath=/some/path /destination/
+```
+
+will create `/destination/file.zip` containing `file.txt` from `/some/path`, overriding both the _Root Path_ and _Select_ from a Zip connection named `connection`.
 
 ### Zip Thresholds
 

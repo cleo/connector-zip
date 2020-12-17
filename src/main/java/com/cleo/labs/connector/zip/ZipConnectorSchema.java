@@ -48,6 +48,13 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
+    final IConnectorProperty<String> select = new PropertyBuilder<>("Select", "")
+            .setAllowedInSetCommand(true)
+            .setDescription("A file/path name or pattern to select for zipping.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
+
+    @Property
     final IConnectorProperty<Boolean> dontZipEmptyDirectories = new PropertyBuilder<>("DontZipEmptyDirectories", false)
             .setAllowedInSetCommand(false)
             .setDescription("Don't include empty directories when zipping.")
