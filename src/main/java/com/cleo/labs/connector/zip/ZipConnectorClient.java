@@ -31,6 +31,7 @@ import com.cleo.connector.api.interfaces.IConnectorOutgoing;
 import com.cleo.connector.shell.interfaces.IConnector;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
 import com.cleo.labs.util.zip.Finder;
+import com.cleo.labs.util.zip.LocalFinderInputStream;
 import com.cleo.labs.util.zip.PartitionedZipDirectory;
 import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
@@ -99,7 +100,7 @@ public class ZipConnectorClient extends ConnectorClient {
         factory.setSourceAndDest(source, null, MacroUtil.SOURCE_FILE, logger);
 
         PartitionedZipDirectory zip = PartitionedZipDirectory.builder(factory.getFile(root+source))
-                .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
+                .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
                 .level(config.getCompressionLevel())
                 .filter(Finder.excluding(config.getExclusions()))
                 .directoryMode(config.getDirectoryMode())
@@ -110,6 +111,8 @@ public class ZipConnectorClient extends ConnectorClient {
         List<Entry> dirList = encoder.getEntries(source);
         return new ConnectorCommandResult(Status.Success, Optional.empty(), dirList);
     }
+
+    public static final String DIRECTORY_LISTING = "directory.listing";
 
     @Command(name = GET)
     public ConnectorCommandResult get(GetCommand get) throws ConnectorException, IOException {
@@ -124,11 +127,21 @@ public class ZipConnectorClient extends ConnectorClient {
 
         File file = factory.getFile(root+sourceFile);
         ZipFilenameEncoder encoder = new ZipFilenameEncoder();
-        Partition partition = encoder.parseFilename(file.getName());
+        Partition partition;
 
-        if (partition != null) {
+        if (file.getName().equals(DIRECTORY_LISTING)) {
+            try (LocalFinderInputStream in = LocalFinderInputStream.builder(factory.getFile(root+sourceDir))
+                    .filter(Finder.excluding(config.getExclusions()))
+                    .build()) {
+                transfer(in, destination.getStream(), true);
+                return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
+            } catch (IOException ioe) {
+                throw new ConnectorException(String.format("'%s' does not exist or is not accessible", sourceFile),
+                    ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
+            }
+        } else if ((partition = encoder.parseFilename(file.getName())) != null) {
             try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
-                    .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
+                    .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
                     .level(config.getCompressionLevel())
                     .filter(Finder.excluding(config.getExclusions())
                             .and(Finder.only(config.getSelect())))
@@ -144,7 +157,7 @@ public class ZipConnectorClient extends ConnectorClient {
             }
         } else {
             try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
-                    .opener(f -> factory.getInputStream(f.file, MacroUtil.SOURCE_FILE))
+                    .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
                     .level(config.getCompressionLevel())
                     .filter(Finder.excluding(config.getExclusions())
                             .and(Finder.only(config.getSelect())))

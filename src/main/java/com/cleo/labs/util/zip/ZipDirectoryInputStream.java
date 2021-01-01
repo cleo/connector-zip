@@ -12,7 +12,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
-import com.cleo.labs.util.zip.Finder.Found;
 import com.google.common.io.ByteStreams;
 
 public class ZipDirectoryInputStream extends FilterInputStream implements LambdaWriterInputStream.Writer {
@@ -175,18 +174,18 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             // time to get the next file and set up a new ZipEntry
             if (finder.hasNext()) {
                 Found next = finder.next();
-                if (next.directory) {
-                    entry = new ZipEntry(next.fullname);
-                    entry.setTime(next.file.lastModified());
+                if (next.directory()) {
+                    entry = new ZipEntry(next.fullname());
+                    entry.setTime(next.modified());
                     entry.setSize(0L);
                     zip.putNextEntry(entry);
                     zip.closeEntry();
                     entry = null;
                 } else {
-                    entry = new ZipEntry(next.fullname);
-                    entry.setTime(next.file.lastModified());
-                    entry.setSize(next.file.length());
-                    entry.setCompressedSize(next.file.length());
+                    entry = new ZipEntry(next.fullname());
+                    entry.setTime(next.modified());
+                    entry.setSize(next.length());
+                    entry.setCompressedSize(next.length());
                     zip.putNextEntry(entry);
                     is = opener.open(next);
                 }

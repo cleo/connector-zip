@@ -10,7 +10,6 @@ import java.util.function.Predicate;
 import java.util.zip.Deflater;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
-import com.cleo.labs.util.zip.Finder.Found;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream.Opener;
 import com.google.common.io.ByteStreams;
 

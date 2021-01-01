@@ -1,4 +1,4 @@
-package com.cleo.labs.connector.zip;
+package com.cleo.labs.util.zip;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -16,9 +16,6 @@ import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 
 import org.junit.Test;
-
-import com.cleo.labs.util.zip.ZipDirectoryInputStream;
-import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
 
 public class TestZipDirectoryInputStream {
 
@@ -83,7 +80,7 @@ public class TestZipDirectoryInputStream {
     public void test() throws IOException {
         long totalSize = 0;
         try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
-                .opener(f -> { return new FileInputStream(f.file); })
+                .opener(f -> { return new FileInputStream(f.file()); })
                 .level(Deflater.NO_COMPRESSION)
                 .build()) {
             totalSize = zip.getTotalSize();
@@ -92,7 +89,7 @@ public class TestZipDirectoryInputStream {
             assertEquals(totalSize, zip.getTotalSize());
         }
         try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
-                .opener(f -> { return new FileInputStream(f.file); })
+                .opener(f -> { return new FileInputStream(f.file()); })
                 .level(Deflater.NO_COMPRESSION)
                 .build()) {
             Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);

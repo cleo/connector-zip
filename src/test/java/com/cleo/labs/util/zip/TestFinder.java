@@ -1,6 +1,7 @@
-package com.cleo.labs.connector.zip;
+package com.cleo.labs.util.zip;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,13 +12,11 @@ import java.util.Arrays;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.cleo.labs.util.zip.Finder;
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.google.common.collect.Iterables;
 
 public class TestFinder {
 
-    @Ignore
     @Test
     public void test() throws IOException {
         Path root = Paths.get(".");
@@ -33,14 +32,14 @@ public class TestFinder {
                 .directoryMode(DirectoryMode.excludeEmpty);
         //Iterator<Finder.Found> files = new Finder(root.toFile(), Finder.including("glob:**.java"), DirectoryMode.excludeEmpty);
         int count = 0;
-        for (Finder.Found f : files) {
+        for (Found f : files) {
             count++;
-            System.out.println(String.format("%d: %d.%d %s %s", count, f.depth, f.index, Arrays.toString(files.checkpoint()), f.fullname));
+            System.out.println(String.format("%d: %s %s", count, f.toString(), Arrays.toString(files.checkpoint())));
         }
         assertTrue(true);
     }
 
-    @Ignore
+    //@Ignore
     @Test
     public void testRestart() throws IOException {
         Path root = Paths.get(".");
@@ -55,8 +54,30 @@ public class TestFinder {
         int count = 0;
         while (files.hasNext()) {
             count++;
-            Finder.Found f = files.next();
-            System.out.println(String.format("%d: %d.%d %s %s", count, f.depth, f.index, Arrays.toString(files.checkpoint()), f.fullname));
+            Found f = files.next();
+            System.out.println(String.format("%d: %d.%d %s %s", count, f.depth(), f.index(), Arrays.toString(files.checkpoint()), f.fullname()));
+        }
+        assertTrue(true);
+    }
+
+    @Test
+    public void testDirectories() throws IOException {
+        Path root = Paths.get(".");
+        //root = Paths.get(System.getProperty("user.home"),"d/vagrant/cache/zip");
+        root = Paths.get(System.getProperty("user.home"),"d/vagrant/harmony/test");
+        Path abs = root.toAbsolutePath();
+        int limit = 0;
+        System.out.println("absolute="+abs);
+        Finder files = new Finder(root.toFile())
+                .filter(Finder.excluding("glob:.*", "glob:target"))
+                //.filter(Finder.excluding("glob:.*", "glob:target", "glob:{**/,}test[2-9]*"))
+                .limit(limit)
+                .directoryMode(DirectoryMode.only);
+        //Iterator<Finder.Found> files = new Finder(root.toFile(), Finder.including("glob:**.java"), DirectoryMode.excludeEmpty);
+        int count = 0;
+        for (Found f : files) {
+            count++;
+            System.out.println(String.format("%d: %s %s", count, f, Arrays.toString(f.contents())));
         }
         assertTrue(true);
     }

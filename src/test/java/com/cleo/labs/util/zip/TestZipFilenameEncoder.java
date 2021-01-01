@@ -1,4 +1,4 @@
-package com.cleo.labs.connector.zip;
+package com.cleo.labs.util.zip;
 
 import static org.junit.Assert.*;
 
@@ -7,6 +7,7 @@ import java.util.List;
 
 import org.junit.Test;
 
+import com.cleo.labs.connector.zip.ZipFilenameEncoder;
 import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
 import com.google.common.io.BaseEncoding;
 

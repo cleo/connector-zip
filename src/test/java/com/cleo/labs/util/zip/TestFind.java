@@ -1,4 +1,4 @@
-package com.cleo.labs.connector.zip;
+package com.cleo.labs.util.zip;
 
 import static org.junit.Assert.*;
 
