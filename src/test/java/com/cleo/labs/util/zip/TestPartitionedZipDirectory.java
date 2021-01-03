@@ -1,13 +1,8 @@
 package com.cleo.labs.util.zip;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import org.junit.Ignore;
@@ -19,9 +14,6 @@ import com.google.common.io.ByteStreams;
 
 public class TestPartitionedZipDirectory {
 
-    private static final Path ZIP = Paths.get(System.getProperty("user.home"), "Downloads", "test.zip");
-
-    //@Ignore
     @Test
     public void testSingle() throws IOException {
         long start = System.currentTimeMillis();
@@ -33,36 +25,6 @@ public class TestPartitionedZipDirectory {
                 .directoryMode(DirectoryMode.exclude)
                 .build()) {
             size = ByteStreams.exhaust(zip);
-        }
-        PartitionedZipDirectory zip = PartitionedZipDirectory.builder(root.root())
-                .opener(root.opener())
-                .filter(Finder.excluding("glob:.git/**","glob:**/*.class"))
-                .threshold(0)
-                .directoryMode(DirectoryMode.exclude)
-                .build();
-        List<Partition> partitions = zip.partitions();
-        partitions.forEach(p -> System.out.println(hms(start)+": "+p));
-        assertEquals(1, partitions.size());
-        assertEquals(size, partitions.get(0).size());
-    }
-
-    @Ignore
-    @Test
-    public void testMock() throws IOException {
-        long start = System.currentTimeMillis();
-        long size = 0;
-        MockBagOFiles root = new MockBagOFiles()
-                .dirs("d%d", 1, 3)
-                .dirs("e%d", 1, 3)
-                .files("f%d.txt", 1, 10, 10000, (byte)' ')
-                .up()
-                .files("e%d.txt", 1, 10, 100, (byte)'.');
-        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(root.root())
-                .opener(root.opener())
-                .filter(Finder.excluding("glob:.git/**","glob:**/*.class"))
-                .directoryMode(DirectoryMode.exclude)
-                .build()) {
-            size = Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
         }
         PartitionedZipDirectory zip = PartitionedZipDirectory.builder(root.root())
                 .opener(root.opener())

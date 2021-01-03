@@ -49,6 +49,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         this.buffer = new byte[BUFFER_SIZE];
         this.closed = false;
         this.out = output;
+        this.filter = ALL;
         this.processor = defaultProcessor;
         this.resolver = resolver;
     }
