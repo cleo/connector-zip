@@ -167,7 +167,6 @@ if (dir.contents()!=null) {
                             !result.containsAFile()) {
                         // don't report out this Found right now
                         pendingDirectories.add(result);
-debug.accept("pendingDirectories.add("+result+")");
                         result = null;
                     }
                 }
@@ -199,7 +198,6 @@ debug.accept("pendingDirectories.add("+result+")");
         checkpoint.add(dir);
         // if it's a directory, push more onto the todo stack
         if (dir.directory() && filter.test(dir)) {
-debug.accept("push("+dir+") file="+dir.file()+" remote="+dir.remote());
             if (dir.file() != null) { 
                 // filter, index and populate dir.contents
                 File[] files = dir.file().listFiles();
