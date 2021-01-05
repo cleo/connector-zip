@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+import com.fasterxml.jackson.core.JsonParser.Feature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Ints;
@@ -31,7 +32,8 @@ public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Foun
     private Found next = null;
     private IOException exception = null;
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private static final ObjectMapper mapper = new ObjectMapper()
+            .configure(Feature.AUTO_CLOSE_SOURCE, false);
 
     /**
      * Creates a new decoder whose elements are parsed from {@code in}.
@@ -66,6 +68,7 @@ public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Foun
                 if (state != State.DONE) {
                     int length = Ints.fromByteArray(buf);
                     next = mapper.readValue(ByteStreams.limit(in, length), Found.class);
+                    next.remote(true);
                     state = State.GOT;
                 }
             } catch (IOException e) {

@@ -5,6 +5,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Iterator;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
@@ -19,18 +20,21 @@ public class LocalFinderInputStream extends FilterInputStream implements LambdaW
 
     private OutputStream output;
     private LambdaWriterInputStream input;
+    private Consumer<String> debug;
 
-    private LocalFinderInputStream(Finder finder) {
+    private LocalFinderInputStream(Finder finder, Consumer<String> debug) {
         super(null);
         this.directories = finder.directoryMode(DirectoryMode.only);
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
+        this.debug = debug;
     }
 
     public static class Builder {
         private File path = null;
         private Predicate<Found> filter = Finder.ALL;
+        private Consumer<String> debug = s->{};
 
         public Builder(File path) {
             this.path = path;
@@ -41,17 +45,25 @@ public class LocalFinderInputStream extends FilterInputStream implements LambdaW
             return this;
         }
 
-        private static Finder setupFinder(File path, Predicate<Found> filter) {
+        public Builder debug(Consumer<String> debug) {
+            this.debug = debug;
+            return this;
+        }
+
+        private Finder setupFinder() {
             if (filter == null) {
                 filter = Finder.ALL;
             }
-            Finder finder = new Finder(path).filter(filter);
+            if (debug == null) {
+                debug = s->{};
+            }
+            Finder finder = new Finder(path).filter(filter).debug(debug);
             return finder;
         }
 
         public LocalFinderInputStream build() {
-            Finder finder = setupFinder(path, filter);
-            return new LocalFinderInputStream(finder);
+            Finder finder = setupFinder();
+            return new LocalFinderInputStream(finder, debug);
         }
     }
 
@@ -63,6 +75,7 @@ public class LocalFinderInputStream extends FilterInputStream implements LambdaW
     public void write(OutputStream out) throws IOException {
         if (directories.hasNext()) {
             Found directory = directories.next();
+            debug.accept("directory.listing includes "+directory);
             byte[] buffer = mapper.writeValueAsBytes(directory);
             output.write(Ints.toByteArray(buffer.length));
             output.write(buffer);

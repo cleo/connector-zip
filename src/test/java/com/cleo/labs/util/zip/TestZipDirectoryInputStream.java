@@ -1,25 +1,22 @@
 package com.cleo.labs.util.zip;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FilterInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.io.OutputStream;
 import java.util.Date;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 
 import org.junit.Test;
 
-public class TestZipDirectoryInputStream {
+import com.cleo.labs.util.zip.MockBagOFiles.DirectoryVerifier;
+import com.google.gwt.thirdparty.guava.common.io.ByteStreams;
 
-    private static final java.nio.file.Path ZIP = Paths.get(System.getProperty("user.home"), "Downloads", "test.zip");
+public class TestZipDirectoryInputStream {
 
     @SuppressWarnings("unused")
     private static class NoisyFileInputStream extends FilterInputStream {
@@ -79,24 +76,35 @@ public class TestZipDirectoryInputStream {
     @Test
     public void test() throws IOException {
         long totalSize = 0;
-        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
-                .opener(f -> { return new FileInputStream(f.file()); })
+        MockBagOFiles root = new MockBagOFiles().files("f%d.txt", 1, 50000, 10000, (byte)' ');
+        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(root.root())
+                .opener(root.opener())
                 .level(Deflater.NO_COMPRESSION)
                 .build()) {
             totalSize = zip.getTotalSize();
-            System.out.println("totalSize="+totalSize);
+            //System.out.println("totalSize="+totalSize);
             assertTrue(zip.isTotalSizeCalculatedYet());
             assertEquals(totalSize, zip.getTotalSize());
         }
-        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(Paths.get(".").toFile())
-                .opener(f -> { return new FileInputStream(f.file()); })
+        DirectoryVerifier verifier = root.verifier();
+        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(root.root())
+                .opener(root.opener())
                 .level(Deflater.NO_COMPRESSION)
-                .build()) {
-            Files.copy(zip, ZIP, StandardCopyOption.REPLACE_EXISTING);
-            assertTrue(ZIP.toFile().exists());
-            assertEquals(totalSize, ZIP.toFile().length());
+                .build();
+            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> p.toFile())) {
+           unzip.setProcessor(entry -> {
+                    if (!entry.entry().isDirectory()) {
+                        OutputStream os = verifier.verify(entry.path());
+                        assertNotNull("path not found or duplicate: "+entry.path().toString(), os);
+                        return os;
+                    }
+                    return null;
+                });
+            long copiedSize = ByteStreams.copy(zip,  unzip);
+            assertEquals(totalSize, copiedSize);
             assertEquals(totalSize, zip.getCurrentSize());
         }
+        /*
         Path sandbox = Paths.get(System.getProperty("user.home"), "Downloads", "sand");
         int i = 0;
         while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;
@@ -110,9 +118,10 @@ public class TestZipDirectoryInputStream {
                 return ZipDirectoryOutputStream.defaultProcessor.process(zip);
             }
         });
-        unzip.setFilter(ZipDirectoryOutputStream.excluding("glob:.git/**","glob:**/*.class"));
+        unzip.setFilter(ZipDirectoryOutputStream.excluding("glob:.git/**","glob:{**}/*.class"));
         Files.copy(ZIP, unzip);
         unzip.close();
+        */
         /*
         ZipInputStream unzip = new ZipInputStream(new NoisyFileInputStream(ZIP));
         byte[] b = new byte[8192];

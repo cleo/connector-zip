@@ -1,13 +1,12 @@
 package com.cleo.labs.util.zip;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class TestLambdaWriterInputStream {
@@ -24,7 +23,7 @@ public class TestLambdaWriterInputStream {
             byte[] b = new byte[i];
             Arrays.fill(b, (byte)('a'+i-1));
             try {
-                System.err.println("writing "+i+" "+(char)('a'+i-1)+"s.");
+                //System.err.println("writing "+i+" "+(char)('a'+i-1)+"s.");
                 o.write(b);
                 i++;
                 if (i > limit) {
@@ -42,7 +41,6 @@ public class TestLambdaWriterInputStream {
         return new String(b, 0, n);
     }
 
-    @Ignore
     @Test
     public void test() throws IOException {
         LambdaWriterInputStream cos = new LambdaWriterInputStream(new TestWriter(8), 20);

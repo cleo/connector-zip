@@ -16,9 +16,10 @@ Root Path | The directory to zip on `GET` or in which to unzip on `PUT` | A dire
 Compression Level | The zip compression level | `none`, `1`-`9`, or `default` | `default`
 Exclusions | A list of file/path patterns to exclude from zipping and unzipping | A table of exclusion patterns | none
 Select | A single file/path pattern to include while zipping | A `glob:` or `regex:` pattern | none
+Remote Directory List | A directory listing for differential replication | Typically a `pipe:` URI | none
 Dont Zip Empty Directories | Select to skip empty directories while zipping | on or off | off
-Zip Size Threshold | Set to split large zip files into parts when the size threshold is crossed | a numeric value followed by `k`, `m`, `g`, or `t`, or `0` for unlimited | `0`
-Unzip Mode | Normal unzip, or log or preflight test options | `unzip`, `log` or `preflight` | `unzip`
+Zip Size Threshold | Set to split large zip files into parts when the size threshold is crossed | A numeric value followed by `k`, `m`, `g`, or `t`, or `0` for unlimited | `0`
+Unzip Mode | Normal unzip, or log or preflight test options | `unzip`, `unzip and log`, `log` or `preflight` | `unzip`
 Suppress Directory Creation | Unzip files, but don't create directories | on or off | off
 Unzip Root Files Last | Save top-level files in a temporary folder until the end | on or off | off
 
@@ -49,6 +50,12 @@ LCOPY zip:connection/file.zip?zip.select=file.txt&zip.rootpath=/some/path /desti
 ```
 
 will create `/destination/file.zip` containing `file.txt` from `/some/path`, overriding both the _Root Path_ and _Select_ from a Zip connection named `connection`.
+
+### Replication
+
+The zip connector can be used to compare a remote directory's contents against the (filtered) root path, only zipping additions and changes to be unzipped and overlaid at the remote target.
+
+Directory listings are produced by zip connectors when a `GET directory.listing` command is processed, usually using a zip uri like `zip:connection/directory.listing` or through the pipe connector `pipe:pipe/directory.listing` in conjunction with an HSP (JetSonic) replication setup. The format is nearly human readable, comprising a sequence of JSON encoded directory listings, each preceded by its byte length encoded in 4 binary bytes. The root directory appears first, followed by the subdirectories in a pre-order traversal (parents before children).
 
 ### Zip Thresholds
 

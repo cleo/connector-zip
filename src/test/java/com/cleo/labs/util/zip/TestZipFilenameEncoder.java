@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import java.util.Arrays;
 import java.util.List;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.cleo.labs.connector.zip.ZipFilenameEncoder;
@@ -52,6 +53,7 @@ public class TestZipFilenameEncoder {
         assertArrayEquals(new int[] {0, 1, 13, 0}, encoder.parseFilename(encoder.getFilename(1)).checkpoint());
     }
 
+    @Ignore
     @Test
     public void testDecoder() {
         Partition p;

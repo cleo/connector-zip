@@ -8,6 +8,7 @@ import static com.cleo.connector.api.command.ConnectorCommandOption.Delete;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributeView;
@@ -30,6 +31,7 @@ import com.cleo.connector.api.interfaces.IConnectorIncoming;
 import com.cleo.connector.api.interfaces.IConnectorOutgoing;
 import com.cleo.connector.shell.interfaces.IConnector;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
+import com.cleo.labs.connector.zip.ZipConnectorSchema.UnzipMode;
 import com.cleo.labs.util.zip.Finder;
 import com.cleo.labs.util.zip.LocalFinderInputStream;
 import com.cleo.labs.util.zip.PartitionedZipDirectory;
@@ -38,6 +40,7 @@ import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream.UnZipEntry;
 import com.cleo.util.MacroUtil;
+import com.google.common.base.Strings;
 
 public class ZipConnectorClient extends ConnectorClient {
     private ZipConnectorConfig config;
@@ -114,6 +117,15 @@ public class ZipConnectorClient extends ConnectorClient {
 
     public static final String DIRECTORY_LISTING = "directory.listing";
 
+    private InputStream getRemoteReplicaInputStream() throws IOException {
+        String remoteReplica = config.getRemoteDirectoryListing();
+        if (!Strings.isNullOrEmpty(remoteReplica)) {
+            logger.debug("comparing files to "+remoteReplica);
+            return factory.getInputStream(remoteReplica, MacroUtil.SOURCE_FILE);
+        }
+        return null;
+    }
+
     @Command(name = GET)
     public ConnectorCommandResult get(GetCommand get) throws ConnectorException, IOException {
         IConnectorIncoming destination = get.getDestination();
@@ -132,6 +144,7 @@ public class ZipConnectorClient extends ConnectorClient {
         if (file.getName().equals(DIRECTORY_LISTING)) {
             try (LocalFinderInputStream in = LocalFinderInputStream.builder(factory.getFile(root+sourceDir))
                     .filter(Finder.excluding(config.getExclusions()))
+                    .debug(s -> logger.debug(s))
                     .build()) {
                 transfer(in, destination.getStream(), true);
                 return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
@@ -162,6 +175,8 @@ public class ZipConnectorClient extends ConnectorClient {
                     .filter(Finder.excluding(config.getExclusions())
                             .and(Finder.only(config.getSelect())))
                     .directoryMode(config.getDirectoryMode())
+                    .remoteReplica(getRemoteReplicaInputStream())
+                    .debug(s -> logger.debug(s))
                     .build()) {
                 transfer(zip, destination.getStream(), true);
                 return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
@@ -175,11 +190,18 @@ public class ZipConnectorClient extends ConnectorClient {
     private class UnZipProcessor implements ZipDirectoryOutputStream.UnZipProcessor {
         private String root;
         private String tempdir = null;
+        private ZipDirectoryOutputStream.UnZipProcessor logProcessor = null;
         public UnZipProcessor(String root) {
             this.root = root;
+            if (config.getUnzipMode()==UnzipMode.unzipAndLog) {
+                logProcessor = getUnZipLogger();
+            }
         }
         @Override
         public OutputStream process(UnZipEntry zip) throws IOException {
+            if (logProcessor != null) {
+                logProcessor.process(zip);
+            }
             if (zip.entry().isDirectory()) {
                 if (!config.getSuppressDirectoryCreation()) {
                     zip.file().mkdirs();
@@ -232,6 +254,19 @@ public class ZipConnectorClient extends ConnectorClient {
         }
     }
 
+    private ZipDirectoryOutputStream.UnZipProcessor getUnZipLogger() {
+        return zip -> {
+            if (zip.entry().isDirectory()) {
+                if (!config.getSuppressDirectoryCreation()) {
+                    logger.logDetail("mkdir "+zip.entry().getName(), 1);
+                }
+            } else {
+                logger.logDetail("file "+zip.entry().getName(), 1);
+            }
+            return null;
+        };
+    }
+
     @Command(name = PUT, options = { Delete })
     public ConnectorCommandResult put(PutCommand put) throws ConnectorException, IOException {
         IConnectorOutgoing source = put.getSource();
@@ -248,20 +283,12 @@ public class ZipConnectorClient extends ConnectorClient {
             unzip.setFilter(ZipDirectoryOutputStream.excluding(config.getExclusions()));
             switch (config.getUnzipMode()) {
             case unzip:
+            case unzipAndLog:
                 processor = this.new UnZipProcessor(root+destination);
                 unzip.setProcessor(processor);
                 break;
             case log:
-                unzip.setProcessor(zip -> {
-                    if (zip.entry().isDirectory()) {
-                        if (!config.getSuppressDirectoryCreation()) {
-                            logger.logDetail("mkdir "+zip.entry().getName(), 1);
-                        }
-                    } else {
-                        logger.logDetail("file "+zip.entry().getName(), 1);
-                    }
-                    return null;
-                });
+                unzip.setProcessor(getUnZipLogger());
                 break;
             case preflight:
                 unzip.setProcessor(zip -> {

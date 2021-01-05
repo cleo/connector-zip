@@ -1,6 +1,8 @@
 package com.cleo.labs.connector.zip;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.cleo.connector.api.ConnectorConfig;
 import com.cleo.connector.api.annotations.Client;
@@ -55,6 +57,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
+    final IConnectorProperty<String> remoteDirectoryListing = new PropertyBuilder<>("RemoteDirectoryListing", "")
+            .setAllowedInSetCommand(true)
+            .setDescription("A file or URI for retrieving a remote directory listing,"+
+                            " and only changes found locally will be zipped.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
+
+    @Property
     final IConnectorProperty<Boolean> dontZipEmptyDirectories = new PropertyBuilder<>("DontZipEmptyDirectories", false)
             .setAllowedInSetCommand(false)
             .setDescription("Don't include empty directories when zipping.")
@@ -69,7 +79,25 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
             .build();
 
-    public enum UnzipMode {unzip, log, preflight};
+    public enum UnzipMode {
+        unzip("unzip"), unzipAndLog("unzip and log"), log("log"), preflight("preflight");
+        private String legend;
+        UnzipMode(String legend) {
+            this.legend = legend;
+        }
+        public String legend() {
+            return legend;
+        }
+        private static Map<String,UnzipMode> lookup = new HashMap<>();
+        static {
+            for (UnzipMode mode : UnzipMode.values()) {
+                lookup.put(mode.legend(), mode);
+            }
+        }
+        public static UnzipMode lookup(String legend) {
+            return lookup.get(legend);
+        }
+    };
 
     @Property
     final IConnectorProperty<String> unzipMode = new PropertyBuilder<>("UnzipMode", UnzipMode.unzip.name())
@@ -79,7 +107,10 @@ public class ZipConnectorSchema extends ConnectorConfig {
                 "occur when unzipping, failing the transfer if any are detected. Select \"unzip\" (the default) "+
                 "to actually unzip, overwriting any existing conflicting files.")
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
-            .setPossibleValues("", UnzipMode.unzip.name(), UnzipMode.log.name(), UnzipMode.preflight.name())
+            .setPossibleValues("", UnzipMode.unzip.legend(),
+                    UnzipMode.unzipAndLog.legend(),
+                    UnzipMode.log.legend(),
+                    UnzipMode.preflight.legend())
             .build();
 
     @Property

@@ -16,7 +16,7 @@ public class TestPartitionedZipDirectory {
 
     @Test
     public void testSingle() throws IOException {
-        long start = System.currentTimeMillis();
+        //long start = System.currentTimeMillis();
         long size = 0;
         MockBagOFiles root = new MockBagOFiles().files("f%d.txt", 1, 50000, 10000, (byte)' ');
         try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(root.root())
@@ -33,12 +33,12 @@ public class TestPartitionedZipDirectory {
                 .directoryMode(DirectoryMode.exclude)
                 .build();
         List<Partition> partitions = zip.partitions();
-        partitions.forEach(p -> System.out.println(hms(start)+": "+p));
+        //partitions.forEach(p -> System.out.println(hms(start)+": "+p));
         assertEquals(1, partitions.size());
         assertEquals(size, partitions.get(0).size());
     }
 
-    private static String hms(long start) {
+    public static String hms(long start) {
         long millis = System.currentTimeMillis()-start;
         long s = millis / 1000;
         long m = s / 60;
@@ -47,7 +47,7 @@ public class TestPartitionedZipDirectory {
     }
 
     public void partTester(DirectoryMode directoryMode) throws IOException {
-        long start = System.currentTimeMillis();
+        //long start = System.currentTimeMillis();
         long threshold = 1024 * 1024;
         MockBagOFiles root = new MockBagOFiles().files("f%d.txt", 1, 50000, 10000, (byte)' ');
         PartitionedZipDirectory zip = PartitionedZipDirectory.builder(root.root())
@@ -57,7 +57,7 @@ public class TestPartitionedZipDirectory {
                 .directoryMode(directoryMode)
                 .build();
         List<Partition> partitions = zip.partitions();
-        partitions.forEach(p -> System.err.println(hms(start)+": "+p));
+        //partitions.forEach(p -> System.err.println(hms(start)+": "+p));
         assertTrue(partitions.size() > 1);
         for (int i=0; i<partitions.size(); i++) {
             try (ZipDirectoryInputStream zipn = ZipDirectoryInputStream.builder(root.root())
@@ -71,7 +71,7 @@ public class TestPartitionedZipDirectory {
                 assertEquals(partitions.get(i).size(), size);
             }
         }
-        System.out.println(hms(start));
+        //System.out.println(hms(start));
     }
 
     //@Ignore

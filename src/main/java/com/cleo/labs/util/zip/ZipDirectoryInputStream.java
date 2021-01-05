@@ -6,6 +6,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -48,27 +49,29 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.currentSize = 0L;
     }
 
-    private static Finder setupFinder(File path, Predicate<Found> filter, DirectoryMode directoryMode, int[] restart) {
+    private static Finder setupFinder(File path,
+            Predicate<Found> filter,
+            DirectoryMode directoryMode,
+            int[] restart,
+            InputStream remoteReplica,
+            Consumer<String> debug) {
         if (filter == null) {
             filter = Finder.ALL;
         }
         if (directoryMode == null) {
             directoryMode = DirectoryMode.include;
         }
-        Finder finder = new Finder(path).filter(filter).directoryMode(directoryMode);
+        Finder finder = new Finder(path).filter(filter).directoryMode(directoryMode).debug(debug);
         if (restart != null && restart.length>0) {
             finder.restart(restart);
+        }
+        if (remoteReplica != null) {
+            finder.remoteReplica(remoteReplica);
         }
         return finder;
     }
 
-    /*
-    public ZipDirectoryInputStream(File path, Opener opener) throws IOException {
-        this(setupFinder(path, Finder.ALL, null, 0, null), opener, Deflater.DEFAULT_COMPRESSION);
-    }
-    */
-
-    public ZipDirectoryInputStream(Finder finder, int limit, Opener opener, int level) throws IOException {
+    private ZipDirectoryInputStream(Finder finder, int limit, Opener opener, int level) throws IOException {
         super(null);
         this.finder = finder;
         this.limit = limit;
@@ -88,6 +91,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         private DirectoryMode directoryMode = DirectoryMode.include;
         private int[] restart = null;
         private int limit = 0;
+        private InputStream remoteReplica = null;
+        private Consumer<String> debug = s->{};
         public Builder(File path) {
             this.path = path;
         }
@@ -119,9 +124,17 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             this.limit = limit;
             return this;
         }
+        public Builder remoteReplica(InputStream remoteReplica) {
+            this.remoteReplica = remoteReplica;
+            return this;
+        }
+        public Builder debug(Consumer<String> debug) {
+            this.debug = debug;
+            return this;
+        }
         public ZipDirectoryInputStream build() throws IOException {
             if (finder == null) {
-                finder = setupFinder(path, filter, directoryMode, restart);
+                finder = setupFinder(path, filter, directoryMode, restart, remoteReplica, debug);
             }
             return new ZipDirectoryInputStream(finder, limit, opener, level);
         }
@@ -174,7 +187,11 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             // time to get the next file and set up a new ZipEntry
             if (finder.hasNext()) {
                 Found next = finder.next();
-                if (next.directory()) {
+                if (next == null) {
+                    // signal that the finder timed out -- go around again
+                } else if (next.directory() && next.fullname().equals("/")) {
+                    // skip the root path
+                } else if (next.directory()) {
                     entry = new ZipEntry(next.fullname());
                     entry.setTime(next.modified());
                     entry.setSize(0L);
@@ -246,6 +263,10 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             } catch (IOException e) {
                 exception = e;
             }
+        }
+        if (finder != null) {
+            finder.close();
+            finder = null;
         }
         super.close();
         if (exception != null) {

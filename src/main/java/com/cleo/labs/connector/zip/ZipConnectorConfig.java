@@ -102,14 +102,6 @@ public class ZipConnectorConfig {
         return pattern;
     }
 
-    public String getSelect() {
-        try {
-            return globByDefault(schema.select.getValue(client));
-        } catch (ConnectorPropertyException e) {
-            return null;
-        }
-    }
-
     public String[] getExclusions() {
         try {
             String value = schema.exclusions.getValue(client);
@@ -122,6 +114,22 @@ public class ZipConnectorConfig {
             return patterns;
         } catch (ConnectorPropertyException e) {
             return new String[0];
+        }
+    }
+
+    public String getSelect() {
+        try {
+            return globByDefault(schema.select.getValue(client));
+        } catch (ConnectorPropertyException e) {
+            return null;
+        }
+    }
+
+    public String getRemoteDirectoryListing() {
+        try {
+            return schema.remoteDirectoryListing.getValue(client);
+        } catch (ConnectorPropertyException e) {
+            return null;
         }
     }
 
@@ -143,7 +151,7 @@ public class ZipConnectorConfig {
     public UnzipMode getUnzipMode() {
         try {
             String value = schema.unzipMode.getValue(client);
-            return UnzipMode.valueOf(value);
+            return UnzipMode.lookup(value);
         } catch (ConnectorPropertyException | IllegalArgumentException | NullPointerException e) {
             // if value is null or empty we'll wind up here
             return UnzipMode.unzip;

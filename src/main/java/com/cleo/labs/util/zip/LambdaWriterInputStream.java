@@ -44,7 +44,7 @@ public class LambdaWriterInputStream extends InputStream {
 
     @Override
     public int available() throws IOException {
-        return length;
+        return closed ? 0 : length;
     }
 
     @Override
@@ -97,6 +97,11 @@ public class LambdaWriterInputStream extends InputStream {
             }
             need(1);
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        closed = true;
     }
 
     public java.io.OutputStream getOutputStream() {

@@ -76,6 +76,15 @@ public class MockBagOFiles {
         now = System.currentTimeMillis();
     }
 
+    public long now() {
+        return now;
+    }
+
+    public MockBagOFiles now(long now) {
+        this.now = now;
+        return this;
+    }
+
     public MockBagOFiles files(String path, int start, int count, int size, byte fill) {
         new Entry(path, start, count, size, fill);
         return this;
