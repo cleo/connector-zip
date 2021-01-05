@@ -1,6 +1,7 @@
 package com.cleo.labs.connector.zip;
 
 import java.io.File;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -101,18 +102,24 @@ public class LexFileFactory {
         }
     }
 
-    public OutputStream getOutputStream(String filename) throws IOException {
-        return getOutputStream(getFile(filename));
+    public OutputStream getOutputStream(String filename, long modtime) throws IOException {
+        return getOutputStream(getFile(filename), modtime);
     }
 
-    public OutputStream getOutputStream(File file) throws IOException {
+    public OutputStream getOutputStream(File file, long modtime) throws IOException {
         try {
             LexFile lexfile = (LexFile)file;
             lexfile.setAllowURI(true);
             NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream(lexfile), (LexActionBean) action, false);
             nfos.setLogTransfers(false);
             nfos.setNoThrottle();
-            return nfos;
+            return new FilterOutputStream(nfos) {
+                @Override
+                public void close() throws IOException {
+                    super.close();
+                    file.setLastModified(modtime);
+                }
+            };
         } catch (IOException ioe) {
             throw ioe;
         } catch (Exception e) {

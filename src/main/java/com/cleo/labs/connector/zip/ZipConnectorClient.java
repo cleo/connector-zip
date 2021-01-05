@@ -208,7 +208,7 @@ public class ZipConnectorClient extends ConnectorClient {
                 }
                 return null;
             } else if (config.unzipRootFilesLast() && zip.path().getNameCount() == 1) {
-                return factory.getOutputStream(saveForLast(zip.file()));
+                return factory.getOutputStream(saveForLast(zip.file()), zip.entry().getTime());
             } else {
                 if (!config.getSuppressDirectoryCreation()) {
                     File parent = zip.file().getParentFile();
@@ -218,7 +218,7 @@ public class ZipConnectorClient extends ConnectorClient {
                         throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
                     }
                 }
-                return factory.getOutputStream(zip.file());
+                return factory.getOutputStream(zip.file(), zip.entry().getTime());
             }
         }
         public File saveForLast(File file) throws IOException {
