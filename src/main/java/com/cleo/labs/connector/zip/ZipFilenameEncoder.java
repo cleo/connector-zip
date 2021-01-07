@@ -58,7 +58,7 @@ public class ZipFilenameEncoder {
         return Arrays.asList(entries);
     }
 
-    public Partition parseFilename(String filename) {
+    public static Partition parseFilename(String filename) {
         Matcher m = ZIP_PATTERN.matcher(filename);
         if (m.matches()) {
             return decodePartition(m.group(2));

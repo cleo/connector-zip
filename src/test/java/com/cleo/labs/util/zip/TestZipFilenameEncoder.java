@@ -50,16 +50,16 @@ public class TestZipFilenameEncoder {
             new Partition(124, 2, new int[] {0, 1, 13,0}));
         ZipFilenameEncoder encoder = new ZipFilenameEncoder(partitions);
         assertEquals("part1-DKehIAA.zip", encoder.getFilename(0));
-        assertArrayEquals(new int[] {0, 1, 13, 0}, encoder.parseFilename(encoder.getFilename(1)).checkpoint());
+        assertArrayEquals(new int[] {0, 1, 13, 0}, ZipFilenameEncoder.parseFilename(encoder.getFilename(1)).checkpoint());
     }
 
     @Ignore
     @Test
     public void testDecoder() {
         Partition p;
-        p = new ZipFilenameEncoder().parseFilename("part3-0Teyo_4ZgaJu.zip");
+        p = ZipFilenameEncoder.parseFilename("part3-0Teyo_4ZgaJu.zip");
         System.out.println(p);
-        p = new ZipFilenameEncoder().parseFilename("part4-0Teyo_4fgfQl.zip");
+        p = ZipFilenameEncoder.parseFilename("part4-0Teyo_4fgfQl.zip");
         System.out.println(p);
     }
 }

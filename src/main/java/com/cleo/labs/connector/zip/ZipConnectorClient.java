@@ -138,7 +138,6 @@ public class ZipConnectorClient extends ConnectorClient {
         factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, logger);
 
         File file = factory.getFile(root+sourceFile);
-        ZipFilenameEncoder encoder = new ZipFilenameEncoder();
         Partition partition;
 
         if (file.getName().equals(DIRECTORY_LISTING)) {
@@ -152,7 +151,7 @@ public class ZipConnectorClient extends ConnectorClient {
                 throw new ConnectorException(String.format("'%s' does not exist or is not accessible", sourceFile),
                     ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
             }
-        } else if ((partition = encoder.parseFilename(file.getName())) != null) {
+        } else if ((partition = ZipFilenameEncoder.parseFilename(file.getName())) != null) {
             try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
                     .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
                     .level(config.getCompressionLevel())
@@ -355,8 +354,7 @@ public class ZipConnectorClient extends ConnectorClient {
 
         factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, logger);
         File file = factory.getFile(root+sourceFile);
-        ZipFilenameEncoder encoder = new ZipFilenameEncoder();
-        Partition partition = encoder.parseFilename(file.getName());
+        Partition partition = ZipFilenameEncoder.parseFilename(file.getName());
 
         if (partition != null) {
             return new ZipFileAttributes(file.getName(), partition);
