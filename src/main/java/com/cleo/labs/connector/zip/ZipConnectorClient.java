@@ -177,6 +177,7 @@ public class ZipConnectorClient extends ConnectorClient {
                     .directoryMode(config.getDirectoryMode())
                     .remoteReplica(getRemoteReplicaInputStream())
                     .debug(s -> logger.debug(s))
+                    .timeout(config.getRemoteDirectoryListingTimeout(), config.getRemoteDirectoryListingTimeoutUnit())
                     .build()) {
                 transfer(zip, destination.getStream(), true);
                 return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);

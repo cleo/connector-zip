@@ -6,6 +6,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.zip.Deflater;
@@ -49,28 +50,6 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.currentSize = 0L;
     }
 
-    private static Finder setupFinder(File path,
-            Predicate<Found> filter,
-            DirectoryMode directoryMode,
-            int[] restart,
-            InputStream remoteReplica,
-            Consumer<String> debug) {
-        if (filter == null) {
-            filter = Finder.ALL;
-        }
-        if (directoryMode == null) {
-            directoryMode = DirectoryMode.include;
-        }
-        Finder finder = new Finder(path).filter(filter).directoryMode(directoryMode).debug(debug);
-        if (restart != null && restart.length>0) {
-            finder.restart(restart);
-        }
-        if (remoteReplica != null) {
-            finder.remoteReplica(remoteReplica);
-        }
-        return finder;
-    }
-
     private ZipDirectoryInputStream(Finder finder, int limit, Opener opener, int level) throws IOException {
         super(null);
         this.finder = finder;
@@ -92,6 +71,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         private int[] restart = null;
         private int limit = 0;
         private InputStream remoteReplica = null;
+        private long timeout = 0;
+        private TimeUnit unit = null;
         private Consumer<String> debug = s->{};
         public Builder(File path) {
             this.path = path;
@@ -128,13 +109,38 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
             this.remoteReplica = remoteReplica;
             return this;
         }
+        public Builder timeout(long timeout, TimeUnit unit) {
+            this.timeout = timeout;
+            this.unit = unit;
+            return this;
+        }
         public Builder debug(Consumer<String> debug) {
             this.debug = debug;
             return this;
         }
+        private Finder setupFinder() {
+            if (filter == null) {
+                filter = Finder.ALL;
+            }
+            if (directoryMode == null) {
+                directoryMode = DirectoryMode.include;
+            }
+            Finder finder = new Finder(path).filter(filter).directoryMode(directoryMode).debug(debug);
+            if (restart != null && restart.length>0) {
+                finder.restart(restart);
+            }
+            if (remoteReplica != null) {
+                finder.remoteReplica(remoteReplica);
+            }
+            if (unit != null) {
+                finder.timeout(timeout, unit);
+            }
+            return finder;
+        }
+
         public ZipDirectoryInputStream build() throws IOException {
             if (finder == null) {
-                finder = setupFinder(path, filter, directoryMode, restart, remoteReplica, debug);
+                finder = setupFinder();
             }
             return new ZipDirectoryInputStream(finder, limit, opener, level);
         }
@@ -182,13 +188,14 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
     }
 
     @Override
-    public void write(OutputStream t) throws IOException {
+    public void write(OutputStream t) throws IOException, InterruptedException {
         if (entry == null) {
             // time to get the next file and set up a new ZipEntry
             if (finder.hasNext()) {
                 Found next = finder.next();
                 if (next == null) {
                     // signal that the finder timed out -- go around again
+                    throw new InterruptedException();
                 } else if (next.directory() && next.fullname().equals("/")) {
                     // skip the root path
                 } else if (next.directory()) {

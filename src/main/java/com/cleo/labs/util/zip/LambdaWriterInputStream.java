@@ -6,7 +6,7 @@ import java.io.InputStream;
 public class LambdaWriterInputStream extends InputStream {
 
     public interface Writer {
-        public void write(java.io.OutputStream out) throws IOException;
+        public void write(java.io.OutputStream out) throws IOException, InterruptedException;
     }
 
     public static final int DEFAULT_BUFFERSIZE = 8192;
@@ -36,7 +36,7 @@ public class LambdaWriterInputStream extends InputStream {
         output = new OutputStream();
     }
 
-    public void need(int n) throws IOException {
+    public void need(int n) throws IOException, InterruptedException {
         while (length < n && !closed) {
             writer.write(output);
         }
@@ -52,7 +52,11 @@ public class LambdaWriterInputStream extends InputStream {
         if (off < 0 || len < 0 || len+off > b.length) {
             throw new IndexOutOfBoundsException();
         }
-        need(len);
+        try {
+            need(len);
+        } catch (InterruptedException e) {
+            return 0; // interrupt means "return 0 and let transfer check for action stop
+        }
         if (length <= 0) {
             return -1;
         } else if (len > length) {
@@ -71,7 +75,11 @@ public class LambdaWriterInputStream extends InputStream {
 
     @Override
     public int read() throws IOException {
-        need(1);
+        try {
+            need(1);
+        } catch (InterruptedException e) {
+            return 0; // interrupt means "return 0 and let transfer check for action stop
+        }
         if (length > 0) {
             int c = buffer[offset] & 0xff;
             offset++;
@@ -95,7 +103,11 @@ public class LambdaWriterInputStream extends InputStream {
             if (skipped==n || closed) {
                 return skipped;
             }
-            need(1);
+            try {
+                need(1);
+            } catch (InterruptedException e) {
+                return 0; // interrupt means "return 0 and let transfer check for action stop
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.cleo.labs.connector.zip;
 
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
 
@@ -131,6 +132,18 @@ public class ZipConnectorConfig {
         } catch (ConnectorPropertyException e) {
             return null;
         }
+    }
+
+    public long getRemoteDirectoryListingTimeout() {
+        try {
+            return schema.remoteDirectoryListingTimeout.getValue(client);
+        } catch (ConnectorPropertyException e) {
+            return 10_000L;
+        }
+    }
+
+    public TimeUnit getRemoteDirectoryListingTimeoutUnit() {
+        return TimeUnit.MILLISECONDS;
     }
 
     public DirectoryMode getDirectoryMode() {

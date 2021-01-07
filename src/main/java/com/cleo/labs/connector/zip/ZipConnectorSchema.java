@@ -65,6 +65,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
+    final IConnectorProperty<Long> remoteDirectoryListingTimeout = new PropertyBuilder<>("RemoteDirectoryListingTimeout", 10_000L)
+            .setDescription("Timeout in milliseconds for reading the Remote Directory Listing."+
+                            " This also affects how long it may take for a GET action to respond to"+
+                            " a request to stop.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
+
+    @Property
     final IConnectorProperty<Boolean> dontZipEmptyDirectories = new PropertyBuilder<>("DontZipEmptyDirectories", false)
             .setAllowedInSetCommand(false)
             .setDescription("Don't include empty directories when zipping.")
