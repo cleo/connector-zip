@@ -131,6 +131,11 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
             int n = unzip.read(buffer);
             if (n < 0) {
                 unzip.closeEntry();
+                if (os != null) {
+                    os.flush();
+                    os.close();
+                    os = null;
+                }
                 if (entry.getTime() >= 0) {
                     try {
                         entryFile.setLastModified(entry.getTime());
@@ -140,11 +145,6 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 }
                 entry = null;
                 entryFile = null;
-                if (os != null) {
-                    os.flush();
-                    os.close();
-                    os = null;
-                }
                 return ENTRY_NEED;
             } else {
                 if (os != null) {
