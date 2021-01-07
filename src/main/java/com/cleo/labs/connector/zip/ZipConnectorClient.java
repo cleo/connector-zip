@@ -203,23 +203,23 @@ public class ZipConnectorClient extends ConnectorClient {
             if (logProcessor != null) {
                 logProcessor.process(zip);
             }
-            if (zip.entry().isDirectory()) {
+            if (zip.directory()) {
                 if (!config.getSuppressDirectoryCreation()) {
                     zip.file().mkdirs();
                 }
                 return null;
             } else if (config.unzipRootFilesLast() && zip.path().getNameCount() == 1) {
-                return factory.getOutputStream(saveForLast(zip.file()), zip.entry().getTime());
+                return factory.getOutputStream(saveForLast(zip.file()), zip.modified());
             } else {
                 if (!config.getSuppressDirectoryCreation()) {
                     File parent = zip.file().getParentFile();
                     if (!parent.exists()) {
                         parent.mkdirs();
                     } else if (!parent.isDirectory()) {
-                        throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
+                        throw new IOException("can not create parent directory for "+zip.name()+": file already exists");
                     }
                 }
-                return factory.getOutputStream(zip.file(), zip.entry().getTime());
+                return factory.getOutputStream(zip.file(), zip.modified());
             }
         }
         public File saveForLast(File file) throws IOException {
@@ -257,12 +257,12 @@ public class ZipConnectorClient extends ConnectorClient {
 
     private ZipDirectoryOutputStream.UnZipProcessor getUnZipLogger() {
         return zip -> {
-            if (zip.entry().isDirectory()) {
+            if (zip.directory()) {
                 if (!config.getSuppressDirectoryCreation()) {
-                    logger.logDetail("mkdir "+zip.entry().getName(), 1);
+                    logger.logDetail("mkdir "+zip.name(), 1);
                 }
             } else {
-                logger.logDetail("file "+zip.entry().getName(), 1);
+                logger.logDetail("file "+zip.name(), 1);
             }
             return null;
         };

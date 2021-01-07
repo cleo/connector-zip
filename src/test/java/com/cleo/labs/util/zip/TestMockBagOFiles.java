@@ -32,7 +32,7 @@ public class TestMockBagOFiles {
                 .build();
              ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> p.toFile())) {
             unzip.setProcessor(entry -> {
-                     if (!entry.entry().isDirectory()) {
+                     if (!entry.directory()) {
                          OutputStream os = verifier.verify(entry.path());
                          assertNotNull("path not found or duplicate: "+entry.path().toString(), os);
                          return os;
@@ -79,7 +79,7 @@ public class TestMockBagOFiles {
                 .build();
              ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> p.toFile())) {
             unzip.setProcessor(entry -> {
-                     if (!entry.entry().isDirectory()) {
+                     if (!entry.directory()) {
                          OutputStream os = verifier.verify(entry.path());
                          if (os==null) {
                              throw new IOException("path not found or duplicate: "+entry.path().toString());
@@ -119,7 +119,7 @@ public class TestMockBagOFiles {
                 .build();
              ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> p.toFile())) {
             unzip.setProcessor(entry -> {
-                     if (!entry.entry().isDirectory()) {
+                     if (!entry.directory()) {
                          OutputStream os = verifier.verify(entry.path());
                          assertNotNull("path not found or duplicate: "+entry.path().toString(), os);
                          return os;

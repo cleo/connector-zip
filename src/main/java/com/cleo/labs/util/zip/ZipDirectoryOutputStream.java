@@ -30,7 +30,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private OutputStream os;
     private byte[] buffer;
     private boolean closed;
-    private BiPredicate<ZipEntry,Path> filter;
+    private BiPredicate<UnZipEntry,Path> filter;
     private UnZipProcessor processor;
     private Resolver resolver;
 
@@ -55,11 +55,19 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     }
 
     public static class UnZipEntry {
-        private ZipEntry entry;
+        private String name;
+        private boolean directory;
+        private long modified;
         private File file;
         private Path path;
-        public ZipEntry entry() {
-            return entry;
+        public String name() {
+            return name;
+        }
+        public boolean directory() {
+            return directory;
+        }
+        public long modified() {
+            return modified;
         }
         public File file() {
             return file;
@@ -67,8 +75,10 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         public Path path() {
             return path;
         }
-        public UnZipEntry(ZipEntry entry, File file, Path path) {
-            this.entry = entry;
+        public UnZipEntry(String name, boolean directory, long modified, File file, Path path) {
+            this.name = name;
+            this.directory = directory;
+            this.modified = modified;
             this.file = file;
             this.path = path;
         }
@@ -79,7 +89,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     }
 
     public static UnZipProcessor defaultProcessor = zip -> {
-        if (zip.entry().isDirectory()) {
+        if (zip.directory()) {
             zip.file().mkdirs();
             return null;
         } else {
@@ -87,7 +97,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
             if (!parent.exists()) {
                 parent.mkdirs();
             } else if (!parent.isDirectory()) {
-                throw new IOException("can not create parent directory for "+zip.entry().getName()+": file already exists");
+                throw new IOException("can not create parent directory for "+zip.name()+": file already exists");
             }
             return new FileOutputStream(zip.file());
         }
@@ -98,7 +108,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         return this;
     }
 
-    public ZipDirectoryOutputStream setFilter(BiPredicate<ZipEntry,Path> filter) {
+    public ZipDirectoryOutputStream setFilter(BiPredicate<UnZipEntry,Path> filter) {
         this.filter = filter;
         return this;
     }
@@ -122,8 +132,13 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 Path entryPath = Paths.get(entry.getName());
                 Path safePath = safeChild(entryPath);
                 entryFile = resolver.resolve(safeChild(entryPath));
-                if (processor != null && filter.test(entry,safePath)) {
-                    os = processor.process(new UnZipEntry(entry, entryFile, safePath));
+                UnZipEntry unzipentry = new UnZipEntry(entry.getName(),
+                        entry.isDirectory(),
+                        entry.getTime(),
+                        entryFile,
+                        safePath);
+                if (processor != null && filter.test(unzipentry,safePath)) {
+                    os = processor.process(unzipentry);
                 }
                 return BUFFER_NEED;
             }
@@ -197,11 +212,11 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         }
     }
 
-    public static BiPredicate<ZipEntry,Path> ALL = (entry,path)->true;
+    public static BiPredicate<UnZipEntry,Path> ALL = (entry,path)->true;
 
-    public static BiPredicate<ZipEntry,Path> NONE = (entry,path)->false;
+    public static BiPredicate<UnZipEntry,Path> NONE = (entry,path)->false;
 
-    public static BiPredicate<ZipEntry,Path> excluding(String...patterns) {
+    public static BiPredicate<UnZipEntry,Path> excluding(String...patterns) {
         if (patterns==null || patterns.length==0) {
             return ALL;
         }

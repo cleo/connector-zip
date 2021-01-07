@@ -93,7 +93,7 @@ public class TestZipDirectoryInputStream {
                 .build();
             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> p.toFile())) {
            unzip.setProcessor(entry -> {
-                    if (!entry.entry().isDirectory()) {
+                    if (!entry.directory()) {
                         OutputStream os = verifier.verify(entry.path());
                         assertNotNull("path not found or duplicate: "+entry.path().toString(), os);
                         return os;
