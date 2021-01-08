@@ -103,6 +103,9 @@ public class ZipConnectorSchema extends ConnectorConfig {
             }
         }
         public static UnzipMode lookup(String legend) {
+            if (!lookup.containsKey(legend)) {
+                throw new IllegalArgumentException();
+            }
             return lookup.get(legend);
         }
     };
