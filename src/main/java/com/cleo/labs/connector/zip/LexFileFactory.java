@@ -1,15 +1,21 @@
 package com.cleo.labs.connector.zip;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Path;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 
 import com.cleo.connector.api.ConnectorException;
 import com.cleo.connector.api.helper.Logger;
 import com.cleo.connector.shell.interfaces.IConnectorAction;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
+import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream;
+import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream.Copier;
 import com.cleo.lexicom.beans.LexActionBean;
 import com.cleo.lexicom.beans.LexFile;
 import com.cleo.lexicom.beans.LexHostBean;
@@ -21,6 +27,7 @@ import com.cleo.lexicom.beans.NetworkFilterOutputStream;
 import com.cleo.versalex.connector.Action;
 import com.cleo.versalex.connector.Network;
 import com.google.common.base.Strings;
+import com.google.gwt.thirdparty.guava.common.io.ByteStreams;
 
 public class LexFileFactory {
     IConnectorHost host = null;
@@ -50,13 +57,13 @@ public class LexFileFactory {
         this.logger = logger;
     }
 
-    public LexFile getFile(String filename, Path subpath) {
+    public LexFile getFile(String filename, String[] subpath) {
         StringBuilder s = new StringBuilder().append(filename);
         if (s.charAt(s.length()-1) != '/') {
             s.append('/');
         }
-        for (Path element : subpath) {
-            s.append(element.toString()).append('/');
+        for (String element : subpath) {
+            s.append(element).append('/');
         }
         s.setLength(s.length()-1);
         return getFile(s.toString());
@@ -82,15 +89,18 @@ public class LexFileFactory {
         }
     }
 
-    public InputStream getInputStream(String filename, int col) throws IOException {
-        return getInputStream(getFile(filename), col);
+    public InputStream getInputStream(String filename) throws IOException {
+        return getInputStream(getFile(filename));
     }
 
-    public InputStream getInputStream(File file, int col) throws IOException {
+    public InputStream getInputStream(File file) throws IOException {
         try {
             LexFile lexfile = (LexFile)file;
             lexfile.setAllowURI(true);
-            NetworkFilterInputStream nfis = new NetworkFilterInputStream(LexIO.getFileInputStream(lexfile), (LexActionBean) action, false);
+            NetworkFilterInputStream nfis = new NetworkFilterInputStream(
+                    new BufferedInputStream(LexIO.getFileInputStream(lexfile)),
+                    (LexActionBean) action,
+                    false);
             nfis.setLogTransfers(false);
             nfis.setNoThrottle();
             return nfis;
@@ -101,6 +111,31 @@ public class LexFileFactory {
         }
     }
 
+    public Copier getCopier() {
+        return (from,to) -> {
+            LexFile lexfile = (LexFile)from.file();
+            if (lexfile.isNormalFile()) {
+                try (FileInputStream fis = new FileInputStream(lexfile.getFile());
+                        FileChannel channel = fis.getChannel()) {
+                    ByteBuffer buffer = ByteBuffer.allocate(ThreadedZipDirectoryInputStream.DEFAULT_BUFFERSIZE);
+                    int n;
+                    while ((n = channel.read(buffer)) >= 0) {
+                        if (n > 0) {
+                            buffer.flip();
+                            to.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
+                        }
+                        buffer.clear();
+                    }
+                }
+            } else {
+                InputStream is = getInputStream(lexfile);
+                ByteStreams.copy(is, to);
+                is.close();
+                to.flush();
+            }
+        };
+    }
+
     public OutputStream getOutputStream(String filename, long modtime) throws IOException {
         return getOutputStream(getFile(filename), modtime);
     }
@@ -109,7 +144,10 @@ public class LexFileFactory {
         try {
             LexFile lexfile = (LexFile)file;
             lexfile.setAllowURI(true);
-            NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(LexIO.getFileOutputStream(lexfile), (LexActionBean) action, false)
+            NetworkFilterOutputStream nfos = new NetworkFilterOutputStream(
+                    new BufferedOutputStream(LexIO.getFileOutputStream(lexfile)),
+                    (LexActionBean) action,
+                    false)
             {
                 @Override
                 public void close() throws IOException {

@@ -10,7 +10,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.util.List;
 import java.util.Optional;
@@ -33,12 +32,14 @@ import com.cleo.connector.shell.interfaces.IConnector;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
 import com.cleo.labs.connector.zip.ZipConnectorSchema.UnzipMode;
 import com.cleo.labs.util.zip.Finder;
+import com.cleo.labs.util.zip.Found;
 import com.cleo.labs.util.zip.LocalFinderInputStream;
 import com.cleo.labs.util.zip.PartitionedZipDirectory;
 import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
+import com.cleo.labs.util.zip.PathUtil;
+import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
-import com.cleo.labs.util.zip.ZipDirectoryOutputStream.UnZipEntry;
 import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
 
@@ -62,37 +63,10 @@ public class ZipConnectorClient extends ConnectorClient {
         return this;
     }
 
-    /**
-     * Converts \ to / and makes sure there is a trailing /.
-     * @param dir a possibly messed up directory name
-     * @return a cleaned up directory name
-     */
-    private String asDirectory(String dir) {
-        return dir.replaceFirst("(?<![/\\\\])$", "/");
-    }
-    /**
-     * Strips off any leading root indicator: a drive-letter: and/or leading \ or /.
-     * @param dir a possibly messed up directory name
-     * @return a cleaned up directory name
-     */
-    private String stripRoot(String dir) {
-        return dir.replaceFirst("^(?:\\p{Alpha}:)?[\\\\/]?", "");
-    }
-    /**
-     * Returns the directory prefix of a file path, if any.
-     * Converts \ to /, trims off any trailing /, then removes
-     * the final /-separated element.
-     * @param file a possibly messed up file path
-     * @return the (possibly empty, but if not ending in /) path prefix
-     */
-    private String justDirectory(String file) {
-        return file.replaceFirst("(?:^|(?<=[/\\\\]))[^/\\\\]+[/\\\\]?$", "");
-    }
-
     @Command(name=DIR)
     public ConnectorCommandResult dir(DirCommand dir) throws ConnectorException, IOException {
-        String root = asDirectory(config.getRootPath());
-        String source = asDirectory(stripRoot(dir.getSource().getPath()));
+        String root = PathUtil.asDirectory(config.getRootPath());
+        String source = PathUtil.asDirectory(PathUtil.stripRoot(dir.getSource().getPath()));
         logger.debug(String.format("DIR '%s'", source));
 
         File file = factory.getFile(root+source);
@@ -103,7 +77,7 @@ public class ZipConnectorClient extends ConnectorClient {
         factory.setSourceAndDest(source, null, MacroUtil.SOURCE_FILE, logger);
 
         PartitionedZipDirectory zip = PartitionedZipDirectory.builder(factory.getFile(root+source))
-                .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
+                .opener(f -> factory.getInputStream(f.file()))
                 .level(config.getCompressionLevel())
                 .filter(Finder.excluding(config.getExclusions()))
                 .directoryMode(config.getDirectoryMode())
@@ -121,7 +95,7 @@ public class ZipConnectorClient extends ConnectorClient {
         String remoteReplica = config.getRemoteDirectoryListing();
         if (!Strings.isNullOrEmpty(remoteReplica)) {
             logger.debug("comparing files to "+remoteReplica);
-            return factory.getInputStream(remoteReplica, MacroUtil.SOURCE_FILE);
+            return factory.getInputStream(remoteReplica);
         }
         return null;
     }
@@ -129,9 +103,9 @@ public class ZipConnectorClient extends ConnectorClient {
     @Command(name = GET)
     public ConnectorCommandResult get(GetCommand get) throws ConnectorException, IOException {
         IConnectorIncoming destination = get.getDestination();
-        String root = asDirectory(config.getRootPath());
-        String sourceDir = justDirectory(get.getSource().getPath());
-        String sourceFile = stripRoot(get.getSource().getPath());
+        String root = PathUtil.asDirectory(config.getRootPath());
+        String sourceDir = PathUtil.justDirectory(get.getSource().getPath());
+        String sourceFile = PathUtil.stripRoot(get.getSource().getPath());
 
         logger.debug(String.format("GET remote '%s' to local '%s'", sourceFile, destination.getPath()));
 
@@ -153,7 +127,7 @@ public class ZipConnectorClient extends ConnectorClient {
             }
         } else if ((partition = ZipFilenameEncoder.parseFilename(file.getName())) != null) {
             try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
-                    .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
+                    .opener(f -> factory.getInputStream(f.file()))
                     .level(config.getCompressionLevel())
                     .filter(Finder.excluding(config.getExclusions())
                             .and(Finder.only(config.getSelect())))
@@ -168,8 +142,8 @@ public class ZipConnectorClient extends ConnectorClient {
                     ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
             }
         } else {
-            try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
-                    .opener(f -> factory.getInputStream(f.file(), MacroUtil.SOURCE_FILE))
+            try (InputStream zip = ThreadedZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
+                    .copier(factory.getCopier())
                     .level(config.getCompressionLevel())
                     .filter(Finder.excluding(config.getExclusions())
                             .and(Finder.only(config.getSelect())))
@@ -198,7 +172,7 @@ public class ZipConnectorClient extends ConnectorClient {
             }
         }
         @Override
-        public OutputStream process(UnZipEntry zip) throws IOException {
+        public OutputStream process(Found zip) throws IOException {
             if (logProcessor != null) {
                 logProcessor.process(zip);
             }
@@ -207,7 +181,7 @@ public class ZipConnectorClient extends ConnectorClient {
                     zip.file().mkdirs();
                 }
                 return null;
-            } else if (config.unzipRootFilesLast() && zip.path().getNameCount() == 1) {
+            } else if (config.unzipRootFilesLast() && zip.path().length == 1) {
                 return factory.getOutputStream(saveForLast(zip.file()), zip.modified());
             } else {
                 if (!config.getSuppressDirectoryCreation()) {
@@ -215,7 +189,7 @@ public class ZipConnectorClient extends ConnectorClient {
                     if (!parent.exists()) {
                         parent.mkdirs();
                     } else if (!parent.isDirectory()) {
-                        throw new IOException("can not create parent directory for "+zip.name()+": file already exists");
+                        throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
                     }
                 }
                 return factory.getOutputStream(zip.file(), zip.modified());
@@ -224,7 +198,7 @@ public class ZipConnectorClient extends ConnectorClient {
         public File saveForLast(File file) throws IOException {
             if (tempdir == null) {
                 for (int tries=0; tempdir==null && tries<10; tries++) {
-                    String test = root+"/"+Paths.get("."+UUID.randomUUID().toString());
+                    String test = root+"/."+UUID.randomUUID().toString();
                     File testfile = factory.getFile(test);
                     if (!testfile.exists() && testfile.mkdir()) {
                         tempdir = test;
@@ -234,7 +208,7 @@ public class ZipConnectorClient extends ConnectorClient {
                     throw new IOException("failed to create holding directory for Unzip Root Files Last option");
                 }
             }
-            File temp = factory.getFile(tempdir, Paths.get(file.getName()));
+            File temp = factory.getFile(tempdir, new String[] {file.getName()});
             logger.debug("saving "+temp.getPath());
             return temp;
         }
@@ -242,7 +216,7 @@ public class ZipConnectorClient extends ConnectorClient {
             if (tempdir != null) {
                 File tempdirfile = factory.getFile(tempdir);
                 for (File temp : tempdirfile.listFiles()) {
-                    File target = factory.getFile(root, Paths.get(temp.getName()));
+                    File target = factory.getFile(root, new String[] {temp.getName()});
                     temp.renameTo(target);
                     logger.debug("restoring "+temp.getName()+" to "+target.getPath());
                 }
@@ -258,10 +232,10 @@ public class ZipConnectorClient extends ConnectorClient {
         return zip -> {
             if (zip.directory()) {
                 if (!config.getSuppressDirectoryCreation()) {
-                    logger.logDetail("mkdir "+zip.name(), 1);
+                    logger.logDetail("mkdir "+zip.fullname(), 1);
                 }
             } else {
-                logger.logDetail("file "+zip.name(), 1);
+                logger.logDetail("file "+zip.fullname(), 1);
             }
             return null;
         };
@@ -270,8 +244,8 @@ public class ZipConnectorClient extends ConnectorClient {
     @Command(name = PUT, options = { Delete })
     public ConnectorCommandResult put(PutCommand put) throws ConnectorException, IOException {
         IConnectorOutgoing source = put.getSource();
-        String root = asDirectory(config.getRootPath());
-        String destination = justDirectory(put.getDestination().getPath());
+        String root = PathUtil.asDirectory(config.getRootPath());
+        String destination = PathUtil.justDirectory(put.getDestination().getPath());
 
         logger.debug(String.format("PUT local '%s' to remote '%s'", source.getPath(), put.getDestination().getPath()));
 
@@ -280,7 +254,7 @@ public class ZipConnectorClient extends ConnectorClient {
         UnZipProcessor processor = null;
 
         try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> factory.getFile(root+destination, p))) {
-            unzip.setFilter(ZipDirectoryOutputStream.excluding(config.getExclusions()));
+            unzip.setFilter(Finder.excluding(config.getExclusions()));
             switch (config.getUnzipMode()) {
             case unzip:
             case unzipAndLog:
@@ -293,7 +267,7 @@ public class ZipConnectorClient extends ConnectorClient {
             case preflight:
                 unzip.setProcessor(zip -> {
                     // first check the implied parent directory unless we're at the top of the zip
-                    if (zip.path().getNameCount() > 1) {
+                    if (zip.path().length > 1) {
                         File parent = zip.file().getParentFile();
                         if (parent.exists()) {
                             if (!parent.isDirectory()) {
@@ -348,9 +322,9 @@ public class ZipConnectorClient extends ConnectorClient {
     @Command(name = ATTR)
     public BasicFileAttributeView getAttributes(String path) throws ConnectorException, IOException {
         logger.debug(String.format("ATTR '%s'", path));
-        String root = asDirectory(config.getRootPath());
-        String sourceDir = justDirectory(path);
-        String sourceFile = stripRoot(path);
+        String root = PathUtil.asDirectory(config.getRootPath());
+        String sourceDir = PathUtil.justDirectory(path);
+        String sourceFile = PathUtil.stripRoot(path);
 
         factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, logger);
         File file = factory.getFile(root+sourceFile);
@@ -379,7 +353,7 @@ public class ZipConnectorClient extends ConnectorClient {
      */
     @UnderlyingPath
     public String getUnderlyingPath(String path) throws ConnectorException, IOException {
-        return asDirectory(config.getRootPath()+stripRoot(path));
+        return PathUtil.asDirectory(config.getRootPath()+PathUtil.stripRoot(path));
     }
 
 }

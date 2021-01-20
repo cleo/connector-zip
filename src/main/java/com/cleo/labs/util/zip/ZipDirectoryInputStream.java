@@ -211,7 +211,7 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
                     entry.setSize(next.length());
                     entry.setCompressedSize(next.length());
                     zip.putNextEntry(entry);
-                    is = opener.open(next);
+                    is = (InputStream)opener.open(next);
                 }
             } else {
                 zip.close();

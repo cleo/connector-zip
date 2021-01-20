@@ -75,7 +75,12 @@ public class Finder implements Iterator<Found>, Iterable<Found> {
         return remoteDecoder != null;
     }
 
-    private static final Found DECODER_STOP = new Found();
+    public static final Found DONE_FINDING = new Found() {
+        @Override
+        public String toString() {
+            return "DONE_FINDING";
+        }
+    }; // sentinel token for async finding
 
     private void start() {
         state = State.GET;
@@ -117,7 +122,7 @@ if (dir.contents()!=null) {
                         debug.accept("remote directory listing exception: "+remoteDecoder.exception().toString());
                     }
                     decoderRunning = false;
-                    stack.addFirst(DECODER_STOP);
+                    stack.addFirst(DONE_FINDING);
                 }, "decoderThread")
                 .start();
                 push(start);
@@ -133,10 +138,10 @@ if (dir.contents()!=null) {
         Found result = null;
         while (result==null && (!stack.isEmpty() || replicating() && decoderRunning)) {
             // pull the next Found, taking care of null (waiting for decodeThread)
-            // and the DECODER_STOP sentinel
+            // and the DONE_FINDING sentinel
             try {
                 result = stack.pollFirst(timeout, unit);
-                if (result == DECODER_STOP) {
+                if (result == DONE_FINDING) {
                     result = null;
                 }
             } catch (InterruptedException e) {

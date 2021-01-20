@@ -3,13 +3,13 @@ package com.cleo.labs.util.zip;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import com.fasterxml.jackson.core.JsonParser.Feature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.ByteStreams;
-import com.google.common.primitives.Ints;
 
 public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Found> {
 
@@ -66,7 +66,7 @@ public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Foun
                     state = State.DONE;
                 }
                 if (state != State.DONE) {
-                    int length = Ints.fromByteArray(buf);
+                    int length = ByteBuffer.wrap(buf).getInt();
                     next = mapper.readValue(ByteStreams.limit(in, length), Found.class);
                     next.remote(true);
                     state = State.GOT;

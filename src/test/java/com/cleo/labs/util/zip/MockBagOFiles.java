@@ -1,8 +1,6 @@
 package com.cleo.labs.util.zip;
 
 import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -142,6 +140,14 @@ public class MockBagOFiles {
             boolean verified = names != null && names.isEmpty();
             return verified;
         }
+
+        @Override
+        public String toString() {
+            return toString("");
+        }
+        public String toString(String indent) {
+            return indent+"fileVerifier("+entry+"): "+names;
+        }
     }
 
     public static class DirectoryVerifier {
@@ -200,19 +206,19 @@ public class MockBagOFiles {
             return null;
         }
 
-        public FillOutputStream verify(Path path) {
+        public FillOutputStream verify(String[] path) {
             DirectoryVerifier dir = this;
-            for (int i=0; i<path.getNameCount()-1; i++) {
-                dir = dir.child(path.getName(i).toString());
+            for (int i=0; i<path.length-1; i++) {
+                dir = dir.child(path[i]);
                 if (dir == null) {
                     return null;
                 }
             }
-            return dir.file(path.getFileName().toString());
+            return dir.file(path[path.length-1]);
         }
 
         public FillOutputStream verify(String path) {
-            return verify(Paths.get(path));
+            return verify(PathUtil.safePath(path));
         }
 
         public boolean filesVerified() {
@@ -228,6 +234,28 @@ public class MockBagOFiles {
         public boolean directoriesVerified() {
             boolean verified = dirs != null && dirs.values().stream().allMatch(DirectoryVerifier::verified);
             return verified;
+        }
+
+        @Override
+        public String toString() {
+            return toString("");
+        }
+
+        public String toString(String indent) {
+            StringBuilder s = new StringBuilder();
+            s.append(indent)
+             .append("directoryVerifier(").append(name).append(": ").append(entry).append(")");
+            if (files!=null) {
+                for (FileVerifier file : files) {
+                    s.append("\n").append(file.toString(indent+"  "));
+                }
+            }
+            if (dirs!=null) {
+                for (DirectoryVerifier dir : dirs.values()) {
+                    s.append("\n").append(dir.toString(indent+"  "));
+                }
+            }
+            return s.toString();
         }
     }
 

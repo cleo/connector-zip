@@ -9,7 +9,7 @@ public class LambdaWriterInputStream extends InputStream {
         public void write(java.io.OutputStream out) throws IOException, InterruptedException;
     }
 
-    public static final int DEFAULT_BUFFERSIZE = 8192;
+    public static final int DEFAULT_BUFFERSIZE = 4*8192;
 
     private Writer writer;
     private byte[] buffer;

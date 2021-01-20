@@ -7,13 +7,16 @@ import java.io.FileNotFoundException;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Paths;
 import java.util.Date;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.cleo.labs.util.zip.MockBagOFiles.DirectoryVerifier;
+import com.google.common.io.CountingInputStream;
 import com.google.gwt.thirdparty.guava.common.io.ByteStreams;
 
 public class TestZipDirectoryInputStream {
@@ -75,6 +78,44 @@ public class TestZipDirectoryInputStream {
 
     @Test
     public void test() throws IOException {
+        //MockBagOFiles root = new MockBagOFiles().files("f%d.txt", 1, 50000, 10000, (byte)' ');
+        MockBagOFiles root = new MockBagOFiles()
+                .dirs("d%d", 1, 3)
+                .dirs("e%d", 1, 3)
+                .files("f%d.txt", 1, 10000, 10000, (byte)' ')
+                .up()
+                .files("e%d.txt", 1, 100, 100, (byte)'.');
+        DirectoryVerifier verifier = root.verifier();
+        try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(root.root())
+                .opener(root.opener())
+                .level(Deflater.NO_COMPRESSION)
+                .build();
+            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
+           unzip.setProcessor(entry -> {
+                    if (!entry.directory()) {
+                        OutputStream os = verifier.verify(entry.path());
+                        assertNotNull("path not found or duplicate: "+entry.path().toString(), os);
+                        return os;
+                    }
+                    return null;
+                });
+           CountingInputStream nzip = new CountingInputStream(zip);
+           ByteStreams.copy(nzip,  unzip);
+           nzip.close();
+           unzip.flush();
+           unzip.close();
+           boolean verified = verifier.verified();
+           if (!verified) {
+               System.out.println(verifier.toString());
+           }
+           assertTrue(verified);
+           System.out.println(nzip.getCount());
+        }
+    }
+
+    @Ignore
+    @Test
+    public void testTotalSize() throws IOException {
         long totalSize = 0;
         MockBagOFiles root = new MockBagOFiles().files("f%d.txt", 1, 50000, 10000, (byte)' ');
         try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(root.root())
@@ -91,7 +132,7 @@ public class TestZipDirectoryInputStream {
                 .opener(root.opener())
                 .level(Deflater.NO_COMPRESSION)
                 .build();
-            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> p.toFile())) {
+            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
            unzip.setProcessor(entry -> {
                     if (!entry.directory()) {
                         OutputStream os = verifier.verify(entry.path());

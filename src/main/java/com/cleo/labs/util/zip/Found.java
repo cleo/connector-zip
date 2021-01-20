@@ -97,7 +97,7 @@ public class Found implements Comparable<Found>, Cloneable {
     @JsonSetter
     public Found fullname(String fullname) {
         this.fullname = fullname;
-        this.path = fullname.split(SLASH_CHAR);
+        this.path = PathUtil.split(fullname);
         return this;
     }
     @JsonSetter
@@ -110,12 +110,15 @@ public class Found implements Comparable<Found>, Cloneable {
         return this;
     }
 
+    /**
+     * The default constructor is used by Jackson deserialization.
+     */
     public Found() {
         this.operation = null;
         this.path = null;
         this.file = null;
         this.directory = false;
-        this.length = -1;
+        this.length = UNKNOWN_LENGTH;
         this.modified = -1;
         this.depth = -1;
         this.index = -1;
@@ -124,6 +127,14 @@ public class Found implements Comparable<Found>, Cloneable {
         this.remote = false;
     }
 
+    /**
+     * The {@code File}-based constructor is used by the {@link Finder} to represent
+     * files it has found.
+     * @param path the path of the file found, relative to the Finder root
+     * @param file the {@code File} that was found at the relative path
+     * @param depth the depth of the Finder path: the root itself is -1, files in the root are 0, and so on
+     * @param index the index, starting from 0, of the file in its sorted directory listing
+     */
     public Found(String[] path, File file, int depth, int index) {
         this.path = path;
         this.file = file;
@@ -138,6 +149,33 @@ public class Found implements Comparable<Found>, Cloneable {
         }
         this.contents = null;
         this.remote = false;
+    }
+
+    public static final long UNKNOWN_LENGTH = -1L;
+
+    /**
+     * The attribute-based constructor is used by the {@link ZipDirectoryOutputStream} when
+     * it finds entries in the archive. A {@code File} is computed by its resolver, but the
+     * file may not exist yet so attributes like {@code directory} and {@code modified} are
+     * explicitly supplied in the archive header. The {@code length} may not be known yet,
+     * depending on the format.
+     * @param path the cleaned up parsed path of the archive entry (see {@link PathUtil#safePath})
+     * @param file the {@code File} calculated by the resolver (which probably does not exist)
+     * @param directory {@code true} for directories, {@code false} for files
+     * @param modified the modified time
+     * @param length the length, or {@code UNKNOWN_LENGTH} if the length is not known
+     */
+    public Found(String[] path, File file, boolean directory, long modified, long length) {
+        this();
+        this.path = path;
+        this.file = file;
+        this.directory = directory;
+        this.modified = modified;
+        this.length = length;
+        this.fullname = SLASH.join(path);
+        if (directory) {
+            this.fullname += '/';
+        }
     }
 
     public Found child(File child, int index) {

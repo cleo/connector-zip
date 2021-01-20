@@ -6,20 +6,14 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.Paths;
-import java.util.function.BiPredicate;
-import java.util.stream.Stream;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class ZipDirectoryOutputStream extends FilterOutputStream implements LambdaReaderOutputStream.Reader {
 
     public interface Resolver {
-        public File resolve(Path path);
+        public File resolve(String[] path);
     }
 
     private LambdaReaderOutputStream output;
@@ -30,12 +24,12 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private OutputStream os;
     private byte[] buffer;
     private boolean closed;
-    private BiPredicate<UnZipEntry,Path> filter;
+    private Predicate<Found> filter;
     private UnZipProcessor processor;
     private Resolver resolver;
 
     private static final int ENTRY_NEED = 512;
-    private static final int BUFFER_SIZE = 8192;
+    private static final int BUFFER_SIZE = 8192 * 4;
     private static final int BUFFER_NEED = 2*BUFFER_SIZE;
 
     public ZipDirectoryOutputStream(Resolver resolver) throws IOException {
@@ -49,43 +43,13 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         this.buffer = new byte[BUFFER_SIZE];
         this.closed = false;
         this.out = output;
-        this.filter = ALL;
+        this.filter = Finder.ALL;
         this.processor = defaultProcessor;
         this.resolver = resolver;
     }
 
-    public static class UnZipEntry {
-        private String name;
-        private boolean directory;
-        private long modified;
-        private File file;
-        private Path path;
-        public String name() {
-            return name;
-        }
-        public boolean directory() {
-            return directory;
-        }
-        public long modified() {
-            return modified;
-        }
-        public File file() {
-            return file;
-        }
-        public Path path() {
-            return path;
-        }
-        public UnZipEntry(String name, boolean directory, long modified, File file, Path path) {
-            this.name = name;
-            this.directory = directory;
-            this.modified = modified;
-            this.file = file;
-            this.path = path;
-        }
-    }
-
     public interface UnZipProcessor {
-        public OutputStream process(UnZipEntry zip) throws IOException;
+        public OutputStream process(Found zip) throws IOException;
     }
 
     public static UnZipProcessor defaultProcessor = zip -> {
@@ -97,7 +61,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
             if (!parent.exists()) {
                 parent.mkdirs();
             } else if (!parent.isDirectory()) {
-                throw new IOException("can not create parent directory for "+zip.name()+": file already exists");
+                throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
             }
             return new FileOutputStream(zip.file());
         }
@@ -108,7 +72,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         return this;
     }
 
-    public ZipDirectoryOutputStream setFilter(BiPredicate<UnZipEntry,Path> filter) {
+    public ZipDirectoryOutputStream setFilter(Predicate<Found> filter) {
         this.filter = filter;
         return this;
     }
@@ -129,16 +93,12 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 unzip = null;
                 return BUFFER_SIZE;
             } else {
-                Path entryPath = Paths.get(entry.getName());
-                Path safePath = safeChild(entryPath);
-                entryFile = resolver.resolve(safeChild(entryPath));
-                UnZipEntry unzipentry = new UnZipEntry(entry.getName(),
-                        entry.isDirectory(),
-                        entry.getTime(),
-                        entryFile,
-                        safePath);
-                if (processor != null && filter.test(unzipentry,safePath)) {
-                    os = processor.process(unzipentry);
+                String entryPath = entry.getName();
+                String[] safePath = PathUtil.safePath(entryPath);
+                entryFile = resolver.resolve(safePath);
+                Found found = new Found(safePath, entryFile, entry.isDirectory(), entry.getTime(), Found.UNKNOWN_LENGTH);
+                if (processor != null && filter.test(found)) {
+                    os = processor.process(found);
                 }
                 return BUFFER_NEED;
             }
@@ -170,18 +130,6 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         }
     }
 
-    private Path safeChild(Path child) {
-        Path root = child.getRoot();
-        if (root != null) {
-            child = root.relativize(child);
-        }
-        child = child.normalize();
-        while (child.startsWith("..")) {
-            child = child.subpath(1, child.getNameCount());
-        }
-        return child;
-    }
-
     @Override
     public void close() throws IOException {
         IOException exception = null;
@@ -210,23 +158,6 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         if (exception != null) {
             throw exception;
         }
-    }
-
-    public static BiPredicate<UnZipEntry,Path> ALL = (entry,path)->true;
-
-    public static BiPredicate<UnZipEntry,Path> NONE = (entry,path)->false;
-
-    public static BiPredicate<UnZipEntry,Path> excluding(String...patterns) {
-        if (patterns==null || patterns.length==0) {
-            return ALL;
-        }
-        PathMatcher[] matchers = new PathMatcher[patterns.length];
-        FileSystem fs = FileSystems.getDefault();
-        for (int i=0; i<patterns.length; i++) {
-            matchers[i] = fs.getPathMatcher(patterns[i]);
-        }
-        return (entry,path)->!Stream.of(matchers)
-            .anyMatch(m -> m.matches(path));
     }
 
 }
