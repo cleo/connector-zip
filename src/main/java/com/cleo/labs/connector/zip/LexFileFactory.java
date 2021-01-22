@@ -9,9 +9,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.function.Consumer;
 
 import com.cleo.connector.api.ConnectorException;
-import com.cleo.connector.api.helper.Logger;
 import com.cleo.connector.shell.interfaces.IConnectorAction;
 import com.cleo.connector.shell.interfaces.IConnectorHost;
 import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream;
@@ -27,9 +27,9 @@ import com.cleo.lexicom.beans.NetworkFilterOutputStream;
 import com.cleo.versalex.connector.Action;
 import com.cleo.versalex.connector.Network;
 import com.google.common.base.Strings;
-import com.google.gwt.thirdparty.guava.common.io.ByteStreams;
+import com.google.common.io.ByteStreams;
 
-public class LexFileFactory {
+public class LexFileFactory implements FileFactory {
     IConnectorHost host = null;
     IConnectorAction action = null;
     Network network = null;
@@ -37,7 +37,7 @@ public class LexFileFactory {
     String source = null;
     String dest = null;
     int col = 0;
-    Logger logger = null;
+    Consumer<String> debug = null;
 
     public void setup(IConnectorHost host, IConnectorAction action) {
         this.host = host;
@@ -50,23 +50,11 @@ public class LexFileFactory {
         }
     }
 
-    public void setSourceAndDest(String source, String dest, int col, Logger logger) {
+    public void setSourceAndDest(String source, String dest, int col, Consumer<String> debug) {
         this.source = source;
         this.dest = dest;
         this.col = col;
-        this.logger = logger;
-    }
-
-    public LexFile getFile(String filename, String[] subpath) {
-        StringBuilder s = new StringBuilder().append(filename);
-        if (s.charAt(s.length()-1) != '/') {
-            s.append('/');
-        }
-        for (String element : subpath) {
-            s.append(element).append('/');
-        }
-        s.setLength(s.length()-1);
-        return getFile(s.toString());
+        this.debug = debug;
     }
 
     public LexFile getFile(String filename) {
@@ -87,10 +75,6 @@ public class LexFileFactory {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    public InputStream getInputStream(String filename) throws IOException {
-        return getInputStream(getFile(filename));
     }
 
     public InputStream getInputStream(File file) throws IOException {
@@ -134,10 +118,6 @@ public class LexFileFactory {
                 to.flush();
             }
         };
-    }
-
-    public OutputStream getOutputStream(String filename, long modtime) throws IOException {
-        return getOutputStream(getFile(filename), modtime);
     }
 
     public OutputStream getOutputStream(File file, long modtime) throws IOException {

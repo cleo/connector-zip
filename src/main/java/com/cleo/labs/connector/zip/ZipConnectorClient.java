@@ -10,10 +10,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import com.cleo.connector.api.ConnectorClient;
 import com.cleo.connector.api.ConnectorException;
@@ -42,10 +47,11 @@ import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
 import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
+import com.google.common.io.ByteStreams;
 
 public class ZipConnectorClient extends ConnectorClient {
     private ZipConnectorConfig config;
-    private LexFileFactory factory;
+    private FileFactory factory;
 
     /**
      * Constructs a new {@code ZipConnectorClient} for the schema
@@ -54,6 +60,17 @@ public class ZipConnectorClient extends ConnectorClient {
     public ZipConnectorClient(ZipConnectorSchema schema) {
         this.config = new ZipConnectorConfig(this, schema);
         this.factory = new LexFileFactory();
+    }
+
+    /**
+     * Constructs a new {@code ZipConnectorClient} for the schema
+     * and an explicit FileFactory (for testing)
+     * @param schema the {@code ZipConnectorSchema}
+     * @param factory the {@code FileFactory} to use (for testing)
+     */
+    public ZipConnectorClient(ZipConnectorSchema schema, FileFactory factory) {
+        this.config = new ZipConnectorConfig(this, schema);
+        this.factory = factory;
     }
 
     @Override
@@ -74,7 +91,7 @@ public class ZipConnectorClient extends ConnectorClient {
             throw new ConnectorException(String.format("'%s' does not exist or is not accessible", source),
                     ConnectorException.Category.fileNonExistentOrNoAccess);
         }
-        factory.setSourceAndDest(source, null, MacroUtil.SOURCE_FILE, logger);
+        factory.setSourceAndDest(source, null, MacroUtil.SOURCE_FILE, s -> logger.debug(s));
 
         PartitionedZipDirectory zip = PartitionedZipDirectory.builder(factory.getFile(root+source))
                 .opener(f -> factory.getInputStream(f.file()))
@@ -109,7 +126,7 @@ public class ZipConnectorClient extends ConnectorClient {
 
         logger.debug(String.format("GET remote '%s' to local '%s'", sourceFile, destination.getPath()));
 
-        factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, logger);
+        factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, s -> logger.debug(s));
 
         File file = factory.getFile(root+sourceFile);
         Partition partition;
@@ -165,6 +182,8 @@ public class ZipConnectorClient extends ConnectorClient {
         private String root;
         private String tempdir = null;
         private ZipDirectoryOutputStream.UnZipProcessor logProcessor = null;
+        private ExecutorService pool = Executors.newCachedThreadPool();
+        private IOException exception = null;
         public UnZipProcessor(String root) {
             this.root = root;
             if (config.getUnzipMode()==UnzipMode.unzipAndLog) {
@@ -173,6 +192,62 @@ public class ZipConnectorClient extends ConnectorClient {
         }
         @Override
         public OutputStream process(Found zip) throws IOException {
+            if (exception != null) {
+                throw exception;
+            }
+            if (zip.directory()) {
+                pool.execute(() -> {
+                    try {
+                        if (logProcessor != null) {
+                            logProcessor.process(zip);
+                        }
+                        if (!config.getSuppressDirectoryCreation()) {
+                            zip.file().mkdirs();
+                        }
+                    } catch (IOException e) {
+                        exception = e;
+                    }
+                });
+            } else {
+                PipedOutputStream out = new PipedOutputStream();
+                PipedInputStream in = new PipedInputStream(out, ThreadedZipDirectoryInputStream.DEFAULT_BUFFERSIZE);
+                pool.execute(() -> {
+                    OutputStream file = null;
+                    try {
+                        if (logProcessor != null) {
+                            logProcessor.process(zip);
+                        }
+                        if (config.unzipRootFilesLast() && zip.path().length == 1) {
+                            file = factory.getOutputStream(saveForLast(zip.file()), zip.modified());
+                        } else {
+                            if (!config.getSuppressDirectoryCreation()) {
+                                File parent = zip.file().getParentFile();
+                                if (!parent.exists()) {
+                                    parent.mkdirs();
+                                } else if (!parent.isDirectory()) {
+                                    throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
+                                }
+                            }
+                            file = factory.getOutputStream(zip.file(), zip.modified());
+                        }
+                        ByteStreams.copy(in, file);
+                    } catch (IOException e) {
+                        exception = e;
+                    } finally {
+                        if (file != null) {
+                            try {
+                                file.close();
+                            } catch (IOException e) {
+                            }
+                        }
+                        try {
+                            in.close();
+                        } catch (IOException e) {
+                        }
+                    }
+                });
+                return out;
+            }
             if (logProcessor != null) {
                 logProcessor.process(zip);
             }
@@ -213,6 +288,7 @@ public class ZipConnectorClient extends ConnectorClient {
             return temp;
         }
         public void finish() throws IOException {
+            shutdownAndAwaitTermination();
             if (tempdir != null) {
                 File tempdirfile = factory.getFile(tempdir);
                 for (File temp : tempdirfile.listFiles()) {
@@ -224,6 +300,27 @@ public class ZipConnectorClient extends ConnectorClient {
                     throw new IOException("failed to rename all files from holding directory: "+tempdir);
                 }
                 tempdirfile.delete();
+            }
+            if (exception != null) {
+                throw exception;
+            }
+        }
+        private void shutdownAndAwaitTermination() throws IOException {
+            pool.shutdown(); // Disable new tasks from being submitted
+            try {
+                // Wait a while for existing tasks to terminate
+                if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                    pool.shutdownNow(); // Cancel currently executing tasks
+                    // Wait a while for tasks to respond to being cancelled
+                    if (!pool.awaitTermination(60, TimeUnit.SECONDS)) {
+                        throw new IOException("unzip file writing thread pool did not terminate");
+                    }
+                }
+            } catch (InterruptedException ie) {
+                // (Re-)Cancel if current thread also interrupted
+                pool.shutdownNow();
+                // Preserve interrupt status
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -249,7 +346,7 @@ public class ZipConnectorClient extends ConnectorClient {
 
         logger.debug(String.format("PUT local '%s' to remote '%s'", source.getPath(), put.getDestination().getPath()));
 
-        factory.setSourceAndDest(put.getSource().getName(), put.getDestination().getPath(), MacroUtil.DEST_FILE, logger);
+        factory.setSourceAndDest(put.getSource().getName(), put.getDestination().getPath(), MacroUtil.DEST_FILE, s -> logger.debug(s));
 
         UnZipProcessor processor = null;
 
@@ -302,10 +399,17 @@ public class ZipConnectorClient extends ConnectorClient {
             transfer(source.getStream(), unzip, false);
             if (processor != null) {
                 processor.finish();
+                processor = null;
             }
             logger.debug(("unzip complete. buffer length="+unzip.getBufferLength()));
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {
+            if (processor != null) {
+                try {
+                    processor.finish();
+                } catch (IOException ignore) {
+                }
+            }
             throw new ConnectorException(String.format("error unzipping '%s'", source),
                 ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
         }
@@ -326,7 +430,7 @@ public class ZipConnectorClient extends ConnectorClient {
         String sourceDir = PathUtil.justDirectory(path);
         String sourceFile = PathUtil.stripRoot(path);
 
-        factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, logger);
+        factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, s -> logger.debug(s));
         File file = factory.getFile(root+sourceFile);
         Partition partition = ZipFilenameEncoder.parseFilename(file.getName());
 

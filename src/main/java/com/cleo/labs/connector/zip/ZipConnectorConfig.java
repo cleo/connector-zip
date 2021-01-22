@@ -138,12 +138,12 @@ public class ZipConnectorConfig {
         try {
             return schema.remoteDirectoryListingTimeout.getValue(client);
         } catch (ConnectorPropertyException e) {
-            return 10_000L;
+            return 10L;
         }
     }
 
     public TimeUnit getRemoteDirectoryListingTimeoutUnit() {
-        return TimeUnit.MILLISECONDS;
+        return TimeUnit.SECONDS;
     }
 
     public DirectoryMode getDirectoryMode() {

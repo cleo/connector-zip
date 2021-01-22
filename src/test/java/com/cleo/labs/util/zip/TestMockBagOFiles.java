@@ -3,21 +3,21 @@ package com.cleo.labs.util.zip;
 import static org.junit.Assert.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipInputStream;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.cleo.labs.util.zip.MockBagOFiles.DirectoryVerifier;
 import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
-import com.google.common.base.Joiner;
 import com.google.common.io.ByteStreams;
 
 public class TestMockBagOFiles {
@@ -37,7 +37,7 @@ public class TestMockBagOFiles {
                 .filter(Finder.excluding("glob:.git/**","glob:**/*.class"))
                 .directoryMode(DirectoryMode.exclude)
                 .build();
-             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
+             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream((p -> new File(PathUtil.join(p))))) {
             unzip.setProcessor(entry -> {
                      if (!entry.directory()) {
                          OutputStream os = verifier.verify(entry.path());
@@ -64,6 +64,20 @@ public class TestMockBagOFiles {
         assertEquals(size, partitions.get(0).size());
     }
 
+    @Ignore
+    @Test
+    public void testMockFinder() throws IOException {
+        MockBagOFiles root = new MockBagOFiles()
+                .dirs("d%d", 1, 3)
+                .dirs("e%d", 1, 3)
+                .files("f%d.txt", 1, 10, 10000, (byte)' ')
+                .up()
+                .files("e%d.txt", 1, 10, 100, (byte)'.');
+        for (Found found : new Finder(root.root())) {
+            System.out.println(found.fullname()+" -> "+found.file().getPath()+": "+found.file().length());
+        }
+    }
+
     @Test
     public void testMockExtra() throws IOException {
         MockBagOFiles root = new MockBagOFiles()
@@ -84,12 +98,12 @@ public class TestMockBagOFiles {
                 .filter(Finder.excluding("glob:.git/**","glob:**/*.class"))
                 .directoryMode(DirectoryMode.exclude)
                 .build();
-             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
+             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream((p -> new File(PathUtil.join(p))))) {
             unzip.setProcessor(entry -> {
                      if (!entry.directory()) {
                          OutputStream os = verifier.verify(entry.path());
                          if (os==null) {
-                             throw new IOException("path not found or duplicate: "+Joiner.on('/').join(entry.path()));
+                             throw new IOException("path not found or duplicate: "+PathUtil.join(entry.path()));
                          }
                          return os;
                      }
@@ -124,7 +138,7 @@ public class TestMockBagOFiles {
                 .filter(Finder.excluding("glob:.git/**","glob:**/*.class"))
                 .directoryMode(DirectoryMode.exclude)
                 .build();
-             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
+             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream((p -> new File(PathUtil.join(p))))) {
             unzip.setProcessor(entry -> {
                      if (!entry.directory()) {
                          OutputStream os = verifier.verify(entry.path());

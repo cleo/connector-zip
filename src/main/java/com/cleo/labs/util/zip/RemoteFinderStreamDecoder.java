@@ -11,7 +11,7 @@ import com.fasterxml.jackson.core.JsonParser.Feature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.ByteStreams;
 
-public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Found> {
+public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Found>, AutoCloseable {
 
     private enum State {
         /**
@@ -107,6 +107,17 @@ public class RemoteFinderStreamDecoder implements Iterator<Found>, Iterable<Foun
     @Override
     public Iterator<Found> iterator() {
         return this;
+    }
+
+    @Override
+    public void close() {
+        if (in!=null) {
+            try {
+                in.close();
+            } catch (IOException e) {
+                exception = e;
+            }
+        }
     }
 
 }

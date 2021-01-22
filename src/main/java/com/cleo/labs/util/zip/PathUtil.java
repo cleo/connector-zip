@@ -2,6 +2,8 @@ package com.cleo.labs.util.zip;
 
 import java.util.stream.Stream;
 
+import com.google.common.base.Joiner;
+
 public class PathUtil {
 
     /**
@@ -64,6 +66,7 @@ public class PathUtil {
     }
 
     public static final String ANY_SEPARATOR = "[/\\\\]+";
+    public static final String DEFAULT_SEPARATOR = "/";
 
     /**
      * Splits a path into path elements separated by
@@ -79,6 +82,35 @@ public class PathUtil {
             return new String[0];
         }
         return path.split(ANY_SEPARATOR);
+    }
+
+    /**
+     * Joins a split path into a string {@code /} separated
+     * string. {@code null} returns an empty string.
+     * @param path a (possibly {@code null}) array of strings to join
+     * @return the (possibly empty but never {@code null}) joined string
+     */
+    public static String join(String...path) {
+        if (path == null) {
+            return "";
+        }
+        return Joiner.on(DEFAULT_SEPARATOR).skipNulls().join(path);
+    }
+
+    /**
+     * Joins a split path to a parent.
+     * @param parent the (possibly {@code null} or empty) parent
+     * @param path the (possibly {@code null} or empty) path to append
+     * @return the (possibly empty but never {@code null}) joined string
+     */
+    public static String append(String parent, String...path) {
+        if (parent==null || parent.isEmpty()) {
+            return join(path);
+        } else if (path==null || path.length==0) {
+            return parent;
+        } else {
+            return parent+DEFAULT_SEPARATOR+join(path);
+        }
     }
 
     /**

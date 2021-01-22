@@ -32,8 +32,8 @@ public class TestLocalFinderInputStream {
         MockBagOFiles root = new MockBagOFiles()
                 .files("f%d.txt", 1, 50000, 10000, (byte)' ');
         try (LocalFinderInputStream in = LocalFinderInputStream.builder(root.root())
-                .build()) {
-            RemoteFinderStreamDecoder decoder = new RemoteFinderStreamDecoder(in);
+                .build();
+             RemoteFinderStreamDecoder decoder = new RemoteFinderStreamDecoder(in)) {
             int dirs = 0;
             int contents = 0;
             for (Found found : decoder) {
@@ -62,8 +62,8 @@ public class TestLocalFinderInputStream {
         //root = Paths.get(System.getProperty("user.home"),"d/vagrant/harmony/test");
         try (LocalFinderInputStream in = LocalFinderInputStream.builder(root.root())
                 .filter(Finder.excluding("glob:.*", "glob:target"))
-                .build()) {
-            RemoteFinderStreamDecoder decoder = new RemoteFinderStreamDecoder(in);
+                .build();
+             RemoteFinderStreamDecoder decoder = new RemoteFinderStreamDecoder(in)) {
             int dirs = 0;
             int contents = 0;
             for (Found found : decoder) {
@@ -82,8 +82,8 @@ public class TestLocalFinderInputStream {
 
     @Test
     public void testDecoderOnActiualFile() {
-        try (FileInputStream in = new FileInputStream("/Users/jthielens/d/vagrant/harmony/directory.listing")) {
-            RemoteFinderStreamDecoder decoder = new RemoteFinderStreamDecoder(in);
+        try (FileInputStream in = new FileInputStream("/Users/jthielens/d/vagrant/harmony/directory.listing");
+             RemoteFinderStreamDecoder decoder = new RemoteFinderStreamDecoder(in)) {
             int dirs = 0;
             int contents = 0;
             for (Found found : decoder) {

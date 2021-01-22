@@ -1,14 +1,21 @@
 package com.cleo.labs.util.zip;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.cleo.connector.shell.interfaces.IConnectorAction;
+import com.cleo.connector.shell.interfaces.IConnectorHost;
+import com.cleo.labs.connector.zip.FileFactory;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream.Opener;
 import com.google.common.base.Functions;
 
@@ -55,6 +62,14 @@ public class MockBagOFiles {
             return String.format(path, index);
         }
 
+        public String path(MockFile parent, int index) {
+            String parentName = parent==null ? "" : parent.getPath();
+            if (parentName.equals("/")) {
+                parentName = "";
+            }
+            return PathUtil.append(parentName, name(index));
+        }
+
         public String toString() {
             if (directory) {
                 return String.format("%s[%d:%d] [%d]", path, start, count, contents.size());
@@ -70,7 +85,7 @@ public class MockBagOFiles {
 
     public MockBagOFiles() {
         cursor = null;
-        root = new Entry("/", 0, 1);
+        root = new Entry("", 0, 1);
         now = System.currentTimeMillis();
     }
 
@@ -107,8 +122,33 @@ public class MockBagOFiles {
         };
     }
 
+    public FileFactory factory() {
+        return new FileFactory() {
+            @Override
+            public void setup(IConnectorHost host, IConnectorAction action) {
+            }
+            @Override
+            public void setSourceAndDest(String source, String dest, int col, Consumer<String> debug) {
+            }
+            @Override
+            public File getFile(String filename) {
+                // returns the root File
+                return root();
+            }
+            @Override
+            public InputStream getInputStream(File file) throws IOException {
+                MockFile mock = (MockFile)file;
+                return new FillInputStream(mock.entry.fill, mock.entry.size);
+            }
+            @Override
+            public OutputStream getOutputStream(File file, long modtime) throws IOException {
+                throw new IOException("not supported");
+            }
+        };
+    }
+
     public MockFile root() {
-        return new MockFile(root, 0);
+        return new MockFile(null, root, 0);
     }
 
     public DirectoryVerifier verifier() {
@@ -123,7 +163,7 @@ public class MockBagOFiles {
             this.entry = entry;
         }
 
-        public FillOutputStream verify(String name) {
+        synchronized public FillOutputStream verify(String name) {
             if (names == null) {
                 names = IntStream.range(entry.start, entry.start+entry.count)
                         .mapToObj(i -> entry.name(i))
@@ -169,7 +209,7 @@ public class MockBagOFiles {
             }
         }
 
-        private void setupFiles() {
+        synchronized private void setupFiles() {
             if (files == null) {
                 files = entry.contents.stream()
                         .filter(e -> !e.directory)
@@ -178,7 +218,7 @@ public class MockBagOFiles {
             }
         }
 
-        private void setupDirectories() {
+        synchronized private void setupDirectories() {
             if (dirs == null) {
                 dirs = entry.contents.stream()
                         .filter(e -> e.directory)
@@ -200,10 +240,7 @@ public class MockBagOFiles {
 
         private DirectoryVerifier child(String name) {
             setupDirectories();
-            if (dirs.containsKey(name)) {
-                return dirs.get(name);
-            }
-            return null;
+            return dirs.get(name);
         }
 
         public FillOutputStream verify(String[] path) {
@@ -236,6 +273,33 @@ public class MockBagOFiles {
             return verified;
         }
 
+        public FileFactory factory() {
+            return new FileFactory() {
+                @Override
+                public void setup(IConnectorHost host, IConnectorAction action) {
+                }
+                @Override
+                public void setSourceAndDest(String source, String dest, int col, Consumer<String> debug) {
+                }
+                @Override
+                public File getFile(String filename) {
+                    return new File(filename);
+                }
+
+                @Override
+                public InputStream getInputStream(File file) throws IOException {
+                    throw new IOException("not supported");
+                }
+                @Override
+                public OutputStream getOutputStream(File file, long modtime) throws IOException {
+                    OutputStream out = verify(file.getPath());
+                    if (out==null) {
+                        throw new IOException("path not found or duplicate: "+file.getPath());
+                    }
+                    return out;
+                }
+            };
+        }
         @Override
         public String toString() {
             return toString("");
@@ -262,10 +326,24 @@ public class MockBagOFiles {
     @SuppressWarnings("serial")
     public class MockFile extends File {
         private Entry entry;
+        private int index;
+        private long modtime;
+        private MockFile parent;
         
-        public MockFile(Entry entry, int index) {
-            super(entry.name(index));
+        public MockFile(MockFile parent, Entry entry, int index) {
+            super(entry.path(parent, index));
             this.entry = entry;
+            this.index = index;
+            this.modtime = now;
+            this.parent = parent;
+        }
+        public MockFile child(Entry entry, int index) {
+            MockFile child = new MockFile(this, entry, index);
+            return child;
+        }
+        @Override
+        public String getName() {
+            return entry.name(index);
         }
         @Override
         public boolean canExecute() {
@@ -297,7 +375,7 @@ public class MockBagOFiles {
         }
         @Override
         public long lastModified() {
-            return now;
+            return modtime;
         }
         @Override
         public long length() {
@@ -307,8 +385,8 @@ public class MockBagOFiles {
         public File[] listFiles() {
             if (entry.directory) {
                 return entry.contents.stream()
-                            .flatMap(e -> (IntStream.range(e.start, e.start+e.count).mapToObj(i -> new MockFile(e, i))))
-                            .toArray(File[]::new);
+                            .flatMap(e -> (IntStream.range(e.start, e.start+e.count).mapToObj(i -> child(e, i))))
+                            .toArray(MockFile[]::new);
             } else {
                 return null;
             }
@@ -322,6 +400,27 @@ public class MockBagOFiles {
             } else {
                 return null;
             }
+        }
+        @Override
+        public String getParent() {
+            return getParentFile().getPath();
+        }
+        @Override
+        public File getParentFile() {
+            return parent;
+        }
+        @Override
+        public boolean setLastModified(long time) {
+            this.modtime = time;
+            return true;
+        }
+        @Override
+        public boolean mkdir() {
+            return true; // yeah sure
+        }
+        @Override
+        public boolean mkdirs() {
+            return true; // yeah sure
         }
     }
 

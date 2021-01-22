@@ -65,8 +65,8 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .build();
 
     @Property
-    final IConnectorProperty<Long> remoteDirectoryListingTimeout = new PropertyBuilder<>("RemoteDirectoryListingTimeout", 10_000L)
-            .setDescription("Timeout in milliseconds for reading the Remote Directory Listing."+
+    final IConnectorProperty<Long> remoteDirectoryListingTimeout = new PropertyBuilder<>("RemoteDirectoryListingTimeout", 10L)
+            .setDescription("Timeout in seconds for reading the Remote Directory Listing."+
                             " This also affects how long it may take for a GET action to respond to"+
                             " a request to stop.")
             .setGroup(CommonPropertyGroups.ConnectAdvanced)

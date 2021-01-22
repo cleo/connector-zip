@@ -2,12 +2,12 @@ package com.cleo.labs.util.zip;
 
 import static org.junit.Assert.*;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.Paths;
 import java.util.Date;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -90,7 +90,7 @@ public class TestZipDirectoryInputStream {
                 .opener(root.opener())
                 .level(Deflater.NO_COMPRESSION)
                 .build();
-            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
+            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> new File(PathUtil.join(p)))) {
            unzip.setProcessor(entry -> {
                     if (!entry.directory()) {
                         OutputStream os = verifier.verify(entry.path());
@@ -132,7 +132,7 @@ public class TestZipDirectoryInputStream {
                 .opener(root.opener())
                 .level(Deflater.NO_COMPRESSION)
                 .build();
-            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
+            ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> new File(PathUtil.join(p)))) {
            unzip.setProcessor(entry -> {
                     if (!entry.directory()) {
                         OutputStream os = verifier.verify(entry.path());
@@ -146,13 +146,13 @@ public class TestZipDirectoryInputStream {
             assertEquals(totalSize, zip.getCurrentSize());
         }
         /*
-        Path sandbox = Paths.get(System.getProperty("user.home"), "Downloads", "sand");
+        String sandbox = PathUtil.join(System.getProperty("user.home"), "Downloads", "sand");
         int i = 0;
-        while (sandbox.resolve(String.valueOf(i)).toFile().exists()) i++;
-        Path testbox = sandbox.resolve(String.valueOf(i));
-        ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> testbox.resolve(p).toFile());
+        while (new File(PathUtil.join(sandbox, String.valueOf(i))).exists()) i++;
+        String testbox = PathUtil.join(sandbox, String.valueOf(i));
+        ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> new File(PathUtil.append(testbox, p)));
         unzip.setProcessor((zip) -> {
-            if (zip.path().getNameCount()<=1) {
+            if (zip.path().length<=1) {
                 //System.out.println("this is a root file: "+zip.path());
                 return null;
             } else {

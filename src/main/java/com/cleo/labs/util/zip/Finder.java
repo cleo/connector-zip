@@ -98,6 +98,7 @@ if (remote.contents()!=null) {
 }
                         if (closed) {
                             debug.accept("remote directory listing canceled: closed");
+                            remoteDecoder.close();
                             return;
                         }
                         Found local = remoteDirectories.putIfAbsent(remote.fullname(), remote);
@@ -117,6 +118,7 @@ if (dir.contents()!=null) {
                             addToStack(dir, 0);
                         }
                     }
+                    remoteDecoder.close();
                     debug.accept("remote directory listing completed");
                     if (remoteDecoder.exception()!=null) {
                         debug.accept("remote directory listing exception: "+remoteDecoder.exception().toString());
