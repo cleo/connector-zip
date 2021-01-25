@@ -49,7 +49,7 @@ public class TestThreadedZipDirectoryInputStream {
                 .level(Deflater.NO_COMPRESSION)
                 .build();
             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
-           unzip.setProcessor(entry -> {
+           unzip.processor(entry -> {
                     if (!entry.directory()) {
                         //System.out.println("verify("+entry+")");
                         OutputStream os = verifier.verify(entry.path());
@@ -95,7 +95,7 @@ public class TestThreadedZipDirectoryInputStream {
                 .level(Deflater.NO_COMPRESSION)
                 .build();
             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
-           unzip.setProcessor(entry -> {
+           unzip.processor(entry -> {
                     if (!entry.directory()) {
                         //System.out.println("verify("+entry+")");
                         OutputStream os = verifier.verify(entry.path());
@@ -128,7 +128,7 @@ public class TestThreadedZipDirectoryInputStream {
                 .level(Deflater.NO_COMPRESSION)
                 .build();
             ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> Paths.get("", p).toFile())) {
-           unzip.setProcessor(entry -> {
+           unzip.processor(entry -> {
                     if (!entry.directory()) {
                         //System.out.println("verify("+entry+")");
                         OutputStream os = verifier.verify(entry.path());

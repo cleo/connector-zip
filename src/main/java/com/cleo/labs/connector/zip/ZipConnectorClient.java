@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipInputStream;
 
 import com.cleo.connector.api.ConnectorClient;
 import com.cleo.connector.api.ConnectorException;
@@ -43,8 +44,9 @@ import com.cleo.labs.util.zip.PartitionedZipDirectory;
 import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
 import com.cleo.labs.util.zip.PathUtil;
 import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream;
+import com.cleo.labs.util.zip.UnzipDirectoryStreamWrapper;
+import com.cleo.labs.util.zip.UnzipProcessor;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
-import com.cleo.labs.util.zip.ZipDirectoryOutputStream;
 import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
 import com.google.common.io.ByteStreams;
@@ -178,10 +180,10 @@ public class ZipConnectorClient extends ConnectorClient {
         }
     }
 
-    private class UnZipProcessor implements ZipDirectoryOutputStream.UnZipProcessor {
+    private class UnZipProcessor implements UnzipProcessor {
         private String root;
         private String tempdir = null;
-        private ZipDirectoryOutputStream.UnZipProcessor logProcessor = null;
+        private UnzipProcessor logProcessor = null;
         private ExecutorService pool = Executors.newCachedThreadPool();
         private IOException exception = null;
         public UnZipProcessor(String root) {
@@ -325,7 +327,7 @@ public class ZipConnectorClient extends ConnectorClient {
         }
     }
 
-    private ZipDirectoryOutputStream.UnZipProcessor getUnZipLogger() {
+    private UnzipProcessor getUnZipLogger() {
         return zip -> {
             if (zip.directory()) {
                 if (!config.getSuppressDirectoryCreation()) {
@@ -350,19 +352,20 @@ public class ZipConnectorClient extends ConnectorClient {
 
         UnZipProcessor processor = null;
 
-        try (ZipDirectoryOutputStream unzip = new ZipDirectoryOutputStream(p -> factory.getFile(root+destination, p))) {
-            unzip.setFilter(Finder.excluding(config.getExclusions()));
+        try (UnzipDirectoryStreamWrapper unzip = new UnzipDirectoryStreamWrapper(p -> factory.getFile(root+destination, p))) {
+            unzip.filter(Finder.excluding(config.getExclusions()))
+                 .interrupted(() -> connectorAction.isInterrupted());
             switch (config.getUnzipMode()) {
             case unzip:
             case unzipAndLog:
                 processor = this.new UnZipProcessor(root+destination);
-                unzip.setProcessor(processor);
+                unzip.processor(processor);
                 break;
             case log:
-                unzip.setProcessor(getUnZipLogger());
+                unzip.processor(getUnZipLogger());
                 break;
             case preflight:
-                unzip.setProcessor(zip -> {
+                unzip.processor(zip -> {
                     // first check the implied parent directory unless we're at the top of the zip
                     if (zip.path().length > 1) {
                         File parent = zip.file().getParentFile();
@@ -396,12 +399,13 @@ public class ZipConnectorClient extends ConnectorClient {
                 // won't happen
                 break;
             }
-            transfer(source.getStream(), unzip, false);
+            unzip.process(new ZipInputStream(source.getStream()));
+            // transfer(source.getStream(), unzip, false);
             if (processor != null) {
                 processor.finish();
                 processor = null;
             }
-            logger.debug(("unzip complete. buffer length="+unzip.getBufferLength()));
+            logger.debug("unzip complete.");
             return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
         } catch (IOException ioe) {
             if (processor != null) {

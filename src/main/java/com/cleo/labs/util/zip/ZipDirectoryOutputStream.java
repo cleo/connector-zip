@@ -1,7 +1,6 @@
 package com.cleo.labs.util.zip;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,7 +24,7 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
     private byte[] buffer;
     private boolean closed;
     private Predicate<Found> filter;
-    private UnZipProcessor processor;
+    private UnzipProcessor processor;
     private Resolver resolver;
 
     private static final int ENTRY_NEED = 512;
@@ -44,35 +43,16 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
         this.closed = false;
         this.out = output;
         this.filter = Finder.ALL;
-        this.processor = defaultProcessor;
+        this.processor = UnzipProcessor.defaultProcessor;
         this.resolver = resolver;
     }
 
-    public interface UnZipProcessor {
-        public OutputStream process(Found zip) throws IOException;
-    }
-
-    public static UnZipProcessor defaultProcessor = zip -> {
-        if (zip.directory()) {
-            zip.file().mkdirs();
-            return null;
-        } else {
-            File parent = zip.file().getParentFile();
-            if (!parent.exists()) {
-                parent.mkdirs();
-            } else if (!parent.isDirectory()) {
-                throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
-            }
-            return new FileOutputStream(zip.file());
-        }
-    };
-
-    public ZipDirectoryOutputStream setProcessor(UnZipProcessor processor) {
+    public ZipDirectoryOutputStream processor(UnzipProcessor processor) {
         this.processor = processor;
         return this;
     }
 
-    public ZipDirectoryOutputStream setFilter(Predicate<Found> filter) {
+    public ZipDirectoryOutputStream filter(Predicate<Found> filter) {
         this.filter = filter;
         return this;
     }
