@@ -418,7 +418,7 @@ public class ZipConnectorClient extends ConnectorClient {
                 // won't happen
                 break;
             }
-            unzip.process(source.getStream());
+            unzip.process(source.getStream(), PathUtil.justFile(put.getDestination().getPath(), "file.bin"));
             // transfer(source.getStream(), unzip, false);
             if (processor != null) {
                 processor.finish();

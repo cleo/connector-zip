@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.function.Function;
 
 import com.google.common.io.ByteStreams;
+import com.google.gwt.thirdparty.guava.common.base.Strings;
 
 public abstract class FoundInputStream extends FilterInputStream {
 
@@ -52,7 +53,7 @@ public abstract class FoundInputStream extends FilterInputStream {
     public static final byte[] ZIP_SIGNATURE = new byte[] {0x50, 0x4B, 0x03, 0x04};
     public static final byte[] CLEO_SIGNATURE = new byte[] {0x0C, 0x4C, 0x0E, 0x00};
 
-    public static FoundInputStream getFoundInputStream(InputStream in) throws IOException {
+    public static FoundInputStream getFoundInputStream(InputStream in, String filename) throws IOException {
         PushbackInputStream push = new PushbackInputStream(in, ZIP_SIGNATURE.length);
         byte[] sig = new byte[4];
         ByteStreams.readFully(push, sig);
@@ -61,7 +62,13 @@ public abstract class FoundInputStream extends FilterInputStream {
             return new ZipFoundInputStream(push);
         } else if (Arrays.equals(sig, CLEO_SIGNATURE)) {
             return new ZapFoundInputStream(push);
+        } else if (!Strings.isNullOrEmpty(filename)) {
+            return new BytesFoundInputStream(push, filename);
         }
         throw new IOException("invalid input stream for archive");
+    }
+
+    public static FoundInputStream getFoundInputStream(InputStream in) throws IOException {
+        return getFoundInputStream(in, null);
     }
 }

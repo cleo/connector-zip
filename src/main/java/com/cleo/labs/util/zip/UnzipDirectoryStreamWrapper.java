@@ -39,8 +39,8 @@ public class UnzipDirectoryStreamWrapper implements AutoCloseable {
 
     public static final int BUFFER_SIZE = 16384;
 
-    public void process(InputStream in) throws IOException {
-        FoundInputStream archive = FoundInputStream.getFoundInputStream(in);
+    public void process(InputStream in, String filename) throws IOException {
+        FoundInputStream archive = FoundInputStream.getFoundInputStream(in, filename);
         archive.resolver(resolver);
         Found found;
         byte[] buf = new byte[BUFFER_SIZE];

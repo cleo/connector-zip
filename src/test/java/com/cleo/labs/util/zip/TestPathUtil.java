@@ -51,6 +51,28 @@ public class TestPathUtil {
     }
 
     @Test
+    public void testJustFile() {
+        assertEquals("", PathUtil.justFile(""));
+        assertEquals("", PathUtil.justFile("/"));
+        assertEquals("", PathUtil.justFile("\\"));
+        assertEquals("", PathUtil.justFile("c:"));
+        assertEquals("x", PathUtil.justFile("", "x"));
+        assertEquals("x", PathUtil.justFile("/", "x"));
+        assertEquals("x", PathUtil.justFile("\\", "x"));
+        assertEquals("x", PathUtil.justFile("c:", "x"));
+        assertEquals("a", PathUtil.justFile("a"));
+        assertEquals("a", PathUtil.justFile("a/"));
+        assertEquals("a", PathUtil.justFile("a\\"));
+        assertEquals("d", PathUtil.justFile("a\\/b/c\\d/"));
+        assertEquals("b", PathUtil.justFile("a/b"));
+        assertEquals("b", PathUtil.justFile("a\\b/"));
+        assertEquals("b", PathUtil.justFile("a/b\\"));
+        assertEquals("a", PathUtil.justFile("c:a"));
+        assertEquals("b", PathUtil.justFile("c:a\\b"));
+        assertEquals("b", PathUtil.justFile("\\\\host\\b/"));
+    }
+
+    @Test
     public void testSafeChild() {
         assertArrayEquals(new String[] {"a"}, PathUtil.safePath(".././a/.."));
         assertArrayEquals(new String[] {"a"}, PathUtil.safePath(".././a/../"));

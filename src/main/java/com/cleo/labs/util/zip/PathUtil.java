@@ -34,7 +34,31 @@ public class PathUtil {
     public static String justDirectory(String file) {
         // this is capture(stripRoot + (name + slash(es))*) + name + slashes
         // all replaced by the capture (dropping the final name + slashes)
-        return file.replaceFirst("^((?:\\p{Alpha}:|/|\\\\)*(?:[^/\\\\]+[/\\\\]+)*)"+"[^/\\\\]+[/\\\\]*$", "$1");
+        return file.replaceFirst("^((?:\\p{Alpha}:|/|\\\\)*(?:[^/\\\\]+[/\\\\]+)*?)"+"[^/\\\\]+[/\\\\]*$", "$1");
+    }
+
+    /**
+     * Returns the file path stripped of {@link #justDirectory}.
+     * @param file a possibly messed up file path
+     * @return the (possibly empty) file name (with no leading or trailing slashes)
+     */
+    public static String justFile(String file) {
+        return file.replaceFirst("^((?:\\p{Alpha}:|/|\\\\)*(?:[^/\\\\]+[/\\\\]+)*?)"+"(?:([^/\\\\]+)[/\\\\]*)?$", "$2");
+    }
+
+    /**
+     * Returns the result of {@link #justDirectory(String)}, but
+     * using a default value in place of the empty result.
+     * @param file a possibly messed up file path
+     * @param ifEmpty the result to use in place of an empty result
+     * @return the result
+     */
+    public static String justFile(String file, String ifEmpty) {
+        String result = justFile(file);
+        if (result.isEmpty()) {
+            result = ifEmpty;
+        }
+        return result;
     }
 
     /**
