@@ -235,6 +235,7 @@ public class ZipConnectorClient extends ConnectorClient {
                         exception = e;
                     }
                 });
+                return null;
             } else {
                 PipedOutputStream out = new PipedOutputStream();
                 PipedInputStream in = new PipedInputStream(out, ThreadedZipDirectoryInputStream.DEFAULT_BUFFERSIZE);
@@ -280,27 +281,6 @@ public class ZipConnectorClient extends ConnectorClient {
                     }
                 });
                 return out;
-            }
-            if (logProcessor != null) {
-                logProcessor.process(zip);
-            }
-            if (zip.directory()) {
-                if (!config.getSuppressDirectoryCreation()) {
-                    zip.file().mkdirs();
-                }
-                return null;
-            } else if (config.unzipRootFilesLast() && zip.path().length == 1) {
-                return factory.getOutputStream(saveForLast(zip.file()), zip.modified());
-            } else {
-                if (!config.getSuppressDirectoryCreation()) {
-                    File parent = zip.file().getParentFile();
-                    if (!parent.exists()) {
-                        parent.mkdirs();
-                    } else if (!parent.isDirectory()) {
-                        throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
-                    }
-                }
-                return factory.getOutputStream(zip.file(), zip.modified());
             }
         }
         public File saveForLast(File file) throws IOException {
