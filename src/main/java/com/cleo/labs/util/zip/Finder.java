@@ -75,13 +75,6 @@ public class Finder implements Iterator<Found>, Iterable<Found> {
         return remoteDecoder != null;
     }
 
-    public static final Found DONE_FINDING = new Found() {
-        @Override
-        public String toString() {
-            return "DONE_FINDING";
-        }
-    }; // sentinel token for async finding
-
     private void start() {
         state = State.GET;
         Found start = new Found(new String[0], root, -1, 0);
@@ -124,7 +117,7 @@ if (dir.contents()!=null) {
                         debug.accept("remote directory listing exception: "+remoteDecoder.exception().toString());
                     }
                     decoderRunning = false;
-                    stack.addFirst(DONE_FINDING);
+                    stack.addFirst(Found.FOUND_END);
                 }, "decoderThread")
                 .start();
                 push(start);
@@ -143,7 +136,7 @@ if (dir.contents()!=null) {
             // and the DONE_FINDING sentinel
             try {
                 result = stack.pollFirst(timeout, unit);
-                if (result == DONE_FINDING) {
+                if (result == Found.FOUND_END) {
                     result = null;
                 }
             } catch (InterruptedException e) {
@@ -242,7 +235,7 @@ if (dir.contents()!=null) {
                 dir = dir.calculateReplica(remote);
 if (dir.contents()!=null) {
     debug.accept("replica calulated in push for "+dir);
-    Stream.of(dir.contents()).forEach(x->debug.accept("> "+x));
+    Stream.of(dir.contents()).forEach(x->debug.accept("= "+x));
 }
             }
             // if we are restarting, prune the list by the restart index
@@ -447,7 +440,6 @@ if (dir.contents()!=null) {
             throw new NoSuchElementException();
         }
         state = State.GET;
-if (directoryMode==DirectoryMode.only) debug.accept("Finder next() = "+next);
         return next;
     }
 

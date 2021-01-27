@@ -12,8 +12,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.zip.Deflater;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 
@@ -28,7 +26,7 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
     private int level;
 
     private OutputStream output;
-    private ZipOutputStream zip;
+    private FoundOutputStream zip;
 
     private Thread finderThread;
     private Thread zipThread;
@@ -50,7 +48,7 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
                     break;
                 }
             }
-            while (!closed && !foundQueue.offer(Finder.DONE_FINDING, foundQueueTimeout, foundQueueUnit));
+            while (!closed && !foundQueue.offer(Found.FOUND_END, foundQueueTimeout, foundQueueUnit));
         } catch (InterruptedException e) {
             // done
         }
@@ -62,28 +60,20 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
             Found found;
             do {
                 found = foundQueue.poll(foundQueueTimeout, foundQueueUnit);
-                if (found == Finder.DONE_FINDING || found == null) {
+                if (found == Found.FOUND_END || found == null) {
                     // done, or go back and wait for more
                 } else if (found.directory() && found.fullname().equals("/")) {
                     // skip the root path
                 } else if (found.directory()) {
-                    ZipEntry entry = new ZipEntry(found.fullname());
-                    entry.setTime(found.modified());
-                    entry.setSize(0L);
-                    zip.putNextEntry(entry);
+                    zip.putNextEntry(found);
                     zip.closeEntry();
-                    entry = null;
                 } else {
-                    ZipEntry entry = new ZipEntry(found.fullname());
-                    entry.setTime(found.modified());
-                    entry.setSize(found.length());
-                    entry.setCompressedSize(found.length());
-                    zip.putNextEntry(entry);
+                    zip.putNextEntry(found);
                     copier.copy(found, zip);
                     zip.flush();
                     zip.closeEntry();
                 }
-            } while (!closed && found != Finder.DONE_FINDING);
+            } while (!closed && found != Found.FOUND_END);
         } catch (IOException e) {
             exception = e;
         } catch (InterruptedException e) {
@@ -112,9 +102,7 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
         // start the zipping thread from the foundQueue to the OutputStream
         this.exception = null;
         this.output = new PipedOutputStream(this);
-        this.zip = new ZipOutputStream(output);
-        zip.setMethod(ZipEntry.DEFLATED);
-        zip.setLevel(level);
+        this.zip = FoundOutputStream.getFoundOutputStream(output, level);
         this.zipThread = new Thread(runZipThread, "zipThread");
         zipThread.start();
     }

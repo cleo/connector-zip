@@ -33,12 +33,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
 
     public static final String DEFAULT = "default";
     public static final String NONE = "none";
+    public static final String ZAP = "zap";
 
     @Property
     final public IConnectorProperty<String> compressionLevel = new PropertyBuilder<>("CompressionLevel", DEFAULT)
             .setAllowedInSetCommand(false)
-            .setDescription("Compression level none (0), 1-9, or default compression.")
-            .setPossibleValues(DEFAULT,NONE,"1","2","3","4","5","6","7","8","9")
+            .setDescription("Compression level none (0), 1-9, or default compression."+
+                            " Select \"zap\" for Cleo custom replication format.")
+            .setPossibleValues(DEFAULT,NONE,"1","2","3","4","5","6","7","8","9",ZAP)
             .build();
 
     @Property
@@ -69,6 +71,14 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .setDescription("Timeout in seconds for reading the Remote Directory Listing."+
                             " This also affects how long it may take for a GET action to respond to"+
                             " a request to stop.")
+            .setGroup(CommonPropertyGroups.ConnectAdvanced)
+            .build();
+
+    @Property
+    final IConnectorProperty<Boolean> replicateDeletes = new PropertyBuilder<>("ReplicateDeletes", false)
+            .setDescription("Enable when zipping to send deletes, and enable when unzipping to process deletes."+
+                            " Requires \"Remote Directory Listing\" be set to enable differential replication,"+
+                            " and that \"Compression Level\" be set to \"zap\".")
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
             .build();
 

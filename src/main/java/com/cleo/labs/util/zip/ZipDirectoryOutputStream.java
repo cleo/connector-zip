@@ -5,46 +5,46 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 public class ZipDirectoryOutputStream extends FilterOutputStream implements LambdaReaderOutputStream.Reader {
 
-    public interface Resolver {
-        public File resolve(String[] path);
-    }
-
+    private Function<String[],File> resolver;
     private LambdaReaderOutputStream output;
     private InputStream input;
-    private ZipInputStream unzip;
-    private ZipEntry entry;
-    private File entryFile;
+    private FoundInputStream unzip;
+    private Found entry;
     private OutputStream os;
     private byte[] buffer;
     private boolean closed;
     private Predicate<Found> filter;
     private UnzipProcessor processor;
-    private Resolver resolver;
 
     private static final int ENTRY_NEED = 512;
     private static final int BUFFER_SIZE = 8192 * 4;
     private static final int BUFFER_NEED = 2*BUFFER_SIZE;
 
-    public ZipDirectoryOutputStream(Resolver resolver) throws IOException {
+    public ZipDirectoryOutputStream(Function<String[],File> resolver) throws IOException {
         super(null);
+        this.resolver = resolver;
         this.output = new LambdaReaderOutputStream(this, ENTRY_NEED);
         this.input = output.getInputStream();
-        this.unzip = new ZipInputStream(input);
         this.entry = null;
-        this.entryFile = null;
         this.os = null;
         this.buffer = new byte[BUFFER_SIZE];
         this.closed = false;
         this.out = output;
         this.filter = Finder.ALL;
         this.processor = UnzipProcessor.defaultProcessor;
-        this.resolver = resolver;
+//      this.unzip = new ZipFoundInputStream(input);
+//      unzip.resolver(this.resolver);
+    }
+
+    @Override
+    public void bootstrap() throws IOException {
+        this.unzip = FoundInputStream.getFoundInputStream(input);
+        unzip.resolver(resolver);
     }
 
     public ZipDirectoryOutputStream processor(UnzipProcessor processor) {
@@ -73,12 +73,8 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                 unzip = null;
                 return BUFFER_SIZE;
             } else {
-                String entryPath = entry.getName();
-                String[] safePath = PathUtil.safePath(entryPath);
-                entryFile = resolver.resolve(safePath);
-                Found found = new Found(safePath, entryFile, entry.isDirectory(), entry.getTime(), Found.UNKNOWN_LENGTH);
-                if (processor != null && filter.test(found)) {
-                    os = processor.process(found);
+                if (processor != null && filter.test(entry)) {
+                    os = processor.process(entry);
                 }
                 return BUFFER_NEED;
             }
@@ -91,15 +87,14 @@ public class ZipDirectoryOutputStream extends FilterOutputStream implements Lamb
                     os.close();
                     os = null;
                 }
-                if (entry.getTime() >= 0) {
+                if (entry.modified() >= 0) {
                     try {
-                        entryFile.setLastModified(entry.getTime());
+                        entry.file().setLastModified(entry.modified());
                     } catch (Exception ignore) {
                         // don't worry about it -- some URIs don't allow this
                     }
                 }
                 entry = null;
-                entryFile = null;
                 return ENTRY_NEED;
             } else {
                 if (os != null) {

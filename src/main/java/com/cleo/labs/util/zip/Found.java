@@ -1,21 +1,44 @@
 package com.cleo.labs.util.zip;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonSetter;
-import com.google.common.base.Joiner;
 
 public class Found implements Comparable<Found>, Cloneable {
-    public enum Operation {add, delete, match};
+    public enum Operation {
+        add (0),
+        delete (1),
+        match (2),
+        end(100);
 
-    private static final String SLASH_CHAR = "/";
-    private static final Joiner SLASH = Joiner.on(SLASH_CHAR);
+        private int tag;
+        private Operation(int tag) {
+            this.tag = tag;
+        }
+        public int tag() {
+            return tag;
+        }
+        public static Operation of(int tag) {
+            for (Operation o : EnumSet.allOf(Operation.class)) {
+                if (tag == o.tag) {
+                    return o;
+                }
+            }
+            throw new IllegalArgumentException();
+        }
+    }
+
+    public static final Found FOUND_END = new Found().operation(Operation.end);
 
     private String[] path;
     private Operation operation;
@@ -73,6 +96,10 @@ public class Found implements Comparable<Found>, Cloneable {
     @JsonSetter
     public Found operation(Operation operation) {
         this.operation = operation;
+        return this;
+    }
+    public Found file(File file) {
+        this.file = file;
         return this;
     }
     @JsonSetter
@@ -143,7 +170,7 @@ public class Found implements Comparable<Found>, Cloneable {
         this.modified = file.lastModified();
         this.depth = depth;
         this.index = index;
-        this.fullname = SLASH.join(path);
+        this.fullname = PathUtil.join(path);
         if (directory) {
             this.fullname += '/';
         }
@@ -172,9 +199,46 @@ public class Found implements Comparable<Found>, Cloneable {
         this.directory = directory;
         this.modified = modified;
         this.length = length;
-        this.fullname = SLASH.join(path);
+        this.fullname = PathUtil.join(path);
         if (directory) {
             this.fullname += '/';
+        }
+    }
+
+    /**
+     * Reads and returns a new Found object from a DataInputStream in a way
+     * that matches how it was written with {@link #write(DataOutputStream)}.
+     * @param dis the DataInputStream
+     * @return the new Found object
+     * @throws IOException
+     */
+    public static Found read(DataInputStream dis) throws IOException {
+        Found found = new Found();
+        Operation op = Operation.of(dis.readUnsignedByte());
+        if (op == Operation.end) {
+            return FOUND_END;
+        }
+        found.operation(op);
+        found.fullname(dis.readUTF());
+        found.directory(dis.readBoolean());
+        found.modified(dis.readLong());
+        found.length(dis.readLong());
+        return found;
+    }
+
+    /**
+     * Writes the current object to a DataOutputStream in a way
+     * that matches reading it back in with {@link #read(DataInputStream)}.
+     * @param dos the DataOutputStream
+     * @throws IOException
+     */
+    public void write(DataOutputStream dos) throws IOException {
+        dos.writeByte(operation().tag());
+        if (operation() != Operation.end) { 
+            dos.writeUTF(fullname());
+            dos.writeBoolean(directory());
+            dos.writeLong(modified());
+            dos.writeLong(length());
         }
     }
 
@@ -195,6 +259,9 @@ public class Found implements Comparable<Found>, Cloneable {
     }
     @Override
     public String toString() {
+        if (operation==Operation.end) {
+            return "FOUND END";
+        }
         StringBuilder s = new StringBuilder();
         if (operation!=null) {
             s.append(operation).append(' ');
@@ -210,9 +277,9 @@ public class Found implements Comparable<Found>, Cloneable {
         if (!directory) {
             s.append(" length=").append(length).append(" modified=").append(modified);
         }
-if (path==null) {
-    s.append(" path=null!");
-}
+        if (path==null) {
+            s.append(" path=null");
+        }
         return s.toString();
     }
     @Override

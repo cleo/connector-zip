@@ -10,8 +10,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.zip.Deflater;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.google.common.io.ByteStreams;
@@ -29,8 +27,8 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
 
     private OutputStream output;
     private LambdaWriterInputStream input;
-    private ZipOutputStream zip;
-    private ZipEntry entry;
+    private FoundOutputStream zip;
+    private Found entry;
     private InputStream is;
     private byte[] buffer;
     private long currentSize;
@@ -42,9 +40,7 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
         this.input = new LambdaWriterInputStream(this);
         this.in = input;
         this.output = input.getOutputStream();
-        this.zip = new ZipOutputStream(output);
-        zip.setMethod(ZipEntry.DEFLATED);
-        zip.setLevel(level);
+        this.zip = FoundOutputStream.getFoundOutputStream(output, level);
         this.entry = null;
         this.is = null;
         this.currentSize = 0L;
@@ -199,17 +195,12 @@ public class ZipDirectoryInputStream extends FilterInputStream implements Lambda
                 } else if (next.directory() && next.fullname().equals("/")) {
                     // skip the root path
                 } else if (next.directory()) {
-                    entry = new ZipEntry(next.fullname());
-                    entry.setTime(next.modified());
-                    entry.setSize(0L);
+                    entry = next;
                     zip.putNextEntry(entry);
                     zip.closeEntry();
                     entry = null;
                 } else {
-                    entry = new ZipEntry(next.fullname());
-                    entry.setTime(next.modified());
-                    entry.setSize(next.length());
-                    entry.setCompressedSize(next.length());
+                    entry = next;
                     zip.putNextEntry(entry);
                     is = (InputStream)opener.open(next);
                 }

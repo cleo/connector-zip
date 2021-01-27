@@ -19,7 +19,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.zip.ZipInputStream;
 
 import com.cleo.connector.api.ConnectorClient;
 import com.cleo.connector.api.ConnectorException;
@@ -47,8 +46,11 @@ import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream;
 import com.cleo.labs.util.zip.UnzipDirectoryStreamWrapper;
 import com.cleo.labs.util.zip.UnzipProcessor;
 import com.cleo.labs.util.zip.ZipDirectoryInputStream;
+import com.cleo.labs.util.zip.Finder.DirectoryMode;
+import com.cleo.labs.util.zip.Found.Operation;
 import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 
 public class ZipConnectorClient extends ConnectorClient {
@@ -161,7 +163,7 @@ public class ZipConnectorClient extends ConnectorClient {
                     ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
             }
         } else {
-            try (InputStream zip = ThreadedZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
+            try (ThreadedZipDirectoryInputStream zip = ThreadedZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
                     .copier(factory.getCopier())
                     .level(config.getCompressionLevel())
                     .filter(Finder.excluding(config.getExclusions())
@@ -171,6 +173,7 @@ public class ZipConnectorClient extends ConnectorClient {
                     .debug(s -> logger.debug(s))
                     .timeout(config.getRemoteDirectoryListingTimeout(), config.getRemoteDirectoryListingTimeoutUnit())
                     .build()) {
+                zip.finder().replicateDeletes(config.getReplicateDeletes());
                 transfer(zip, destination.getStream(), true);
                 return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
             } catch (IOException ioe) {
@@ -180,17 +183,33 @@ public class ZipConnectorClient extends ConnectorClient {
         }
     }
 
-    private class UnZipProcessor implements UnzipProcessor {
+    private class Unzipper implements UnzipProcessor {
         private String root;
         private String tempdir = null;
         private UnzipProcessor logProcessor = null;
         private ExecutorService pool = Executors.newCachedThreadPool();
         private IOException exception = null;
-        public UnZipProcessor(String root) {
+        public Unzipper(String root) {
             this.root = root;
             if (config.getUnzipMode()==UnzipMode.unzipAndLog) {
-                logProcessor = getUnZipLogger();
+                logProcessor = getUnzipLogger();
             }
+        }
+        private boolean rmdirs(File root) {
+            for (Found file : new Finder(root).directoryMode(DirectoryMode.exclude)) {
+                if (!file.file().delete() && file.file().exists()) {
+                    return false;
+                }
+            }
+            List<Found> dirs =
+                    Lists.reverse(Lists.newArrayList(
+                            new Finder(root).directoryMode(DirectoryMode.only).iterator()));
+            for (Found dir : dirs) {
+                if (!dir.file().delete() && dir.file().exists()) {
+                    return false;
+                }
+            }
+            return true;
         }
         @Override
         public OutputStream process(Found zip) throws IOException {
@@ -203,8 +222,14 @@ public class ZipConnectorClient extends ConnectorClient {
                         if (logProcessor != null) {
                             logProcessor.process(zip);
                         }
-                        if (!config.getSuppressDirectoryCreation()) {
-                            zip.file().mkdirs();
+                        if (zip.operation()==Operation.add) { 
+                            if (!config.getSuppressDirectoryCreation()) {
+                                zip.file().mkdirs();
+                            }
+                        } else if (zip.operation()==Operation.delete) {
+                            if (config.getReplicateDeletes() && !rmdirs(zip.file())) {
+                                logger.logError("unable to delete directory "+zip.fullname());
+                            }
                         }
                     } catch (IOException e) {
                         exception = e;
@@ -219,20 +244,26 @@ public class ZipConnectorClient extends ConnectorClient {
                         if (logProcessor != null) {
                             logProcessor.process(zip);
                         }
-                        if (config.unzipRootFilesLast() && zip.path().length == 1) {
-                            file = factory.getOutputStream(saveForLast(zip.file()), zip.modified());
-                        } else {
-                            if (!config.getSuppressDirectoryCreation()) {
-                                File parent = zip.file().getParentFile();
-                                if (!parent.exists()) {
-                                    parent.mkdirs();
-                                } else if (!parent.isDirectory()) {
-                                    throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
+                        if (zip.operation()==Operation.add) {
+                            if (config.unzipRootFilesLast() && zip.path().length == 1) {
+                                file = factory.getOutputStream(saveForLast(zip.file()), zip.modified());
+                            } else {
+                                if (!config.getSuppressDirectoryCreation()) {
+                                    File parent = zip.file().getParentFile();
+                                    if (!parent.exists()) {
+                                        parent.mkdirs();
+                                    } else if (!parent.isDirectory()) {
+                                        throw new IOException("can not create parent directory for "+zip.fullname()+": file already exists");
+                                    }
                                 }
+                                file = factory.getOutputStream(zip.file(), zip.modified());
                             }
-                            file = factory.getOutputStream(zip.file(), zip.modified());
+                            ByteStreams.copy(in, file);
+                        } else if (zip.operation()==Operation.delete) {
+                            if (config.getReplicateDeletes() && !zip.file().delete()) {
+                                logger.logError("unable to delete file "+zip.fullname());
+                            }
                         }
-                        ByteStreams.copy(in, file);
                     } catch (IOException e) {
                         exception = e;
                     } finally {
@@ -327,14 +358,22 @@ public class ZipConnectorClient extends ConnectorClient {
         }
     }
 
-    private UnzipProcessor getUnZipLogger() {
+    private UnzipProcessor getUnzipLogger() {
         return zip -> {
             if (zip.directory()) {
-                if (!config.getSuppressDirectoryCreation()) {
-                    logger.logDetail("mkdir "+zip.fullname(), 1);
+                if (zip.operation()==Operation.add) { 
+                    if (!config.getSuppressDirectoryCreation()) {
+                        logger.logDetail("mkdir "+zip.fullname(), 1);
+                    }
+                } else if (zip.operation()==Operation.delete) {
+                    logger.logDetail("rmdir "+zip.fullname(), 1);
                 }
             } else {
-                logger.logDetail("file "+zip.fullname(), 1);
+                if (zip.operation()==Operation.add) { 
+                    logger.logDetail("create "+zip.fullname(), 1);
+                } else if (zip.operation()==Operation.delete) {
+                    logger.logDetail("delete "+zip.fullname(), 1);
+                }
             }
             return null;
         };
@@ -350,7 +389,7 @@ public class ZipConnectorClient extends ConnectorClient {
 
         factory.setSourceAndDest(put.getSource().getName(), put.getDestination().getPath(), MacroUtil.DEST_FILE, s -> logger.debug(s));
 
-        UnZipProcessor processor = null;
+        Unzipper processor = null;
 
         try (UnzipDirectoryStreamWrapper unzip = new UnzipDirectoryStreamWrapper(p -> factory.getFile(root+destination, p))) {
             unzip.filter(Finder.excluding(config.getExclusions()))
@@ -358,11 +397,11 @@ public class ZipConnectorClient extends ConnectorClient {
             switch (config.getUnzipMode()) {
             case unzip:
             case unzipAndLog:
-                processor = this.new UnZipProcessor(root+destination);
+                processor = this.new Unzipper(root+destination);
                 unzip.processor(processor);
                 break;
             case log:
-                unzip.processor(getUnZipLogger());
+                unzip.processor(getUnzipLogger());
                 break;
             case preflight:
                 unzip.processor(zip -> {
@@ -399,7 +438,7 @@ public class ZipConnectorClient extends ConnectorClient {
                 // won't happen
                 break;
             }
-            unzip.process(new ZipInputStream(source.getStream()));
+            unzip.process(source.getStream());
             // transfer(source.getStream(), unzip, false);
             if (processor != null) {
                 processor.finish();

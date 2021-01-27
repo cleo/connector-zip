@@ -7,6 +7,8 @@ public class LambdaReaderOutputStream extends OutputStream {
 
     public interface Reader {
         public int read(java.io.InputStream in) throws IOException;
+        default void bootstrap() throws IOException {
+        }
     }
 
     public static final int DEFAULT_BUFFERSIZE = 8192;
@@ -19,6 +21,7 @@ public class LambdaReaderOutputStream extends OutputStream {
     private int length;
     private boolean closed;
     private InputStream input;
+    private boolean bootstrapped;
 
     public LambdaReaderOutputStream(Reader reader, int need) {
         this(reader, need, DEFAULT_BUFFERSIZE);
@@ -36,6 +39,7 @@ public class LambdaReaderOutputStream extends OutputStream {
         length = 0;
         closed = false;
         input = new InputStream();
+        bootstrapped = false;
     }
 
     /**
@@ -79,6 +83,10 @@ public class LambdaReaderOutputStream extends OutputStream {
      */
     private void consume() throws IOException {
         while (length >= need || (closed && length > 0)) {
+            if (!bootstrapped) {
+                reader.bootstrap();
+                bootstrapped = true;
+            }
             need = reader.read(input);
         }
     }
