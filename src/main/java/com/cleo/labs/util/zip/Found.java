@@ -46,8 +46,6 @@ public class Found implements Comparable<Found>, Cloneable {
     private boolean directory;
     private long length;
     private long modified;
-    private int depth;
-    private int index;
     private String fullname;
     private Found[] contents;
     private boolean remote;
@@ -73,12 +71,6 @@ public class Found implements Comparable<Found>, Cloneable {
     @JsonGetter
     public long modified() {
         return modified;
-    }
-    public int depth() {
-        return depth;
-    }
-    public int index() {
-        return index;
     }
     @JsonGetter
     public String fullname() {
@@ -117,10 +109,6 @@ public class Found implements Comparable<Found>, Cloneable {
         this.modified = modified;
         return this;
     }
-    public Found index(int index) {
-        this.index = index;
-        return this;
-    }
     @JsonSetter
     public Found fullname(String fullname) {
         this.fullname = fullname;
@@ -147,8 +135,6 @@ public class Found implements Comparable<Found>, Cloneable {
         this.directory = false;
         this.length = UNKNOWN_LENGTH;
         this.modified = -1;
-        this.depth = -1;
-        this.index = -1;
         this.fullname = null;
         this.contents = null;
         this.remote = false;
@@ -159,17 +145,13 @@ public class Found implements Comparable<Found>, Cloneable {
      * files it has found.
      * @param path the path of the file found, relative to the Finder root
      * @param file the {@code File} that was found at the relative path
-     * @param depth the depth of the Finder path: the root itself is -1, files in the root are 0, and so on
-     * @param index the index, starting from 0, of the file in its sorted directory listing
      */
-    public Found(String[] path, File file, int depth, int index) {
+    public Found(String[] path, File file) {
         this.path = path;
         this.file = file;
         this.directory = file.isDirectory();
         this.length = file.length();
         this.modified = file.lastModified();
-        this.depth = depth;
-        this.index = index;
         this.fullname = PathUtil.join(path);
         if (directory) {
             this.fullname += '/';
@@ -242,13 +224,10 @@ public class Found implements Comparable<Found>, Cloneable {
         }
     }
 
-    public Found child(File child, int index) {
+    public Found child(File child) {
         String[] childpath = Arrays.copyOf(this.path, this.path.length+1);
         childpath[childpath.length-1] = child.getName();
-        return new Found(childpath, child, this.depth+1, index);
-    }
-    public Found child(File child) {
-        return child(child, 0);
+        return new Found(childpath, child);
     }
     public boolean contains(Found found) {
         return directory &&
@@ -266,7 +245,7 @@ public class Found implements Comparable<Found>, Cloneable {
         if (operation!=null) {
             s.append(operation).append(' ');
         }
-        s.append(fullname).append(" [").append(depth).append('.').append(index).append("]");
+        s.append(fullname);
         if (directory) {
             if (contents==null) {
                 s.append(" contents=null");

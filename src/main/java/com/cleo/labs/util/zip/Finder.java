@@ -7,7 +7,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.Iterator;
@@ -47,12 +46,8 @@ public class Finder implements Iterator<Found>, Iterable<Found> {
 
     private State state;
     private Found next;
-    private Found holdNext;
-    private State holdState;
-    private Deque<Found> holdDirectories;
     private LinkedBlockingDeque<Found> stack;
     private Deque<Found> pendingDirectories;
-    private ArrayList<Found> checkpoint;
     private int count;
 
     private RemoteFinderStreamDecoder remoteDecoder;
@@ -66,7 +61,6 @@ public class Finder implements Iterator<Found>, Iterable<Found> {
     private File root;
     private Predicate<Found> filter;
     private DirectoryMode directoryMode;
-    private int[] restart;
     private int limit;
 
     private Consumer<String> debug;
@@ -77,7 +71,7 @@ public class Finder implements Iterator<Found>, Iterable<Found> {
 
     private void start() {
         state = State.GET;
-        Found start = new Found(new String[0], root, -1, 0);
+        Found start = new Found(new String[0], root);
         if (start.directory()) {
             if (replicating()) {
                 start.operation(Operation.match);
@@ -108,7 +102,7 @@ if (dir.contents()!=null) {
     Stream.of(dir.contents()).forEach(x->debug.accept("= "+x));
 }
                             remoteDirectories.remove(remote.fullname());
-                            addToStack(dir, 0);
+                            addToStack(dir);
                         }
                     }
                     remoteDecoder.close();
@@ -175,9 +169,9 @@ if (dir.contents()!=null) {
         return result;
     }
 
-    private void addToStack(Found dir, int start) {
+    private void addToStack(Found dir) {
         Found[] found = dir.contents();
-        for (int i=found.length-1; i>=start; i--) {
+        for (int i=found.length-1; i>=0; i--) {
             if (directoryMode == DirectoryMode.only && !found[i].directory()) {
                 // skip it
             } else if (!found[i].directory() && found[i].operation() == Operation.match) {
@@ -191,11 +185,6 @@ if (dir.contents()!=null) {
     }
 
     private void push(Found dir) {
-        // keep track of the state stack, where to pick up next
-        while (checkpoint.size() > dir.depth()+1) {
-            checkpoint.remove(checkpoint.size()-1);
-        }
-        checkpoint.add(dir);
         // if it's a directory, push more onto the todo stack
         if (dir.directory() && filter.test(dir)) {
             if (dir.file() != null) { 
@@ -206,11 +195,9 @@ if (dir.contents()!=null) {
                         .filter(filter)
                         .sorted() // directories < files, otherwise compare fullname
                         .map(new Function<Found,Found> () {
-                            private int i = 0;
                             @Override
                             public Found apply(Found t) {
-                                t.index(i++)
-                                 .operation(Operation.add);
+                                t.operation(Operation.add);
                                 return t;
                             }
                         })
@@ -238,16 +225,7 @@ if (dir.contents()!=null) {
     Stream.of(dir.contents()).forEach(x->debug.accept("= "+x));
 }
             }
-            // if we are restarting, prune the list by the restart index
-            // remember the list is still backwards, so we just adjust the stop index
-            // >>> note: restarting by index and by replication are not compatible <<<
-            int start = 0;
-            if (dir.depth() < restart.length-1) {
-                start = restart[dir.depth()+1];
-                restart[dir.depth()+1] = 0;
-            }
-            // now push them, in reverse to preserve order
-            addToStack(dir, start);
+            addToStack(dir);
         }
     }
 
@@ -305,7 +283,6 @@ if (dir.contents()!=null) {
             }
             if (done()) {
                 state = State.DONE;
-                checkpoint.clear();
             } else {
                 state = State.GOT;
                 if (next != null) {
@@ -323,13 +300,8 @@ if (dir.contents()!=null) {
 
         this.next = null;
         this.state = State.NEW;
-        this.holdNext = null;
-        this.holdState = State.NEW;
-        this.holdDirectories = new ArrayDeque<>();
         this.stack = new LinkedBlockingDeque<>();
         this.pendingDirectories = new ArrayDeque<>();
-        this.checkpoint = new ArrayList<>();
-        this.restart = new int[0];
         this.limit = 0;
         this.count = 0;
 
@@ -356,14 +328,6 @@ if (dir.contents()!=null) {
             throw new IllegalStateException("Finder is iterating -- can't set directoryMode");
         }
         this.directoryMode = directoryMode;
-        return this;
-    }
-
-    public Finder restart(int[] restart) {
-        if (state != State.NEW) {
-            throw new IllegalStateException("Finder is iterating -- can't set restart");
-        }
-        this.restart = restart==null ? new int[0] : restart.clone();
         return this;
     }
 
@@ -400,33 +364,8 @@ if (dir.contents()!=null) {
         return this;
     }
 
-    public void hold() {
-        hasNext(); // want to hold in GOT state so checkpoint is where to resume
-        this.limit = count;
-        holdNext = next;
-        holdState = state;
-        if (directoryMode != DirectoryMode.exclude && !checkpoint.isEmpty()) {
-            holdDirectories = new ArrayDeque<>();
-            holdDirectories.addAll(checkpoint.subList(0, checkpoint.size()-1));
-        }
-        next = null;
-        state = State.DONE;
-    }
-
-    public void unhold() {
-        this.limit = 0;
-        this.count = holdState==State.GOT ? 1 : 0;
-        next = holdNext;
-        state = holdState;
-        if (directoryMode != DirectoryMode.exclude) {
-            pendingDirectories = holdDirectories;
-            holdDirectories = new ArrayDeque<>();
-        }
-        holdNext = null;
-    }
-
     public int count() {
-        return count - ((holdNext!=null ? holdState : state)==State.GOT ? 1 : 0); // subtract the lookahead if in GOT state
+        return count;
     }
 
     @Override
@@ -441,17 +380,6 @@ if (dir.contents()!=null) {
         }
         state = State.GET;
         return next;
-    }
-
-    public int[] checkpoint() {
-        if (checkpoint.size() <= 1) {
-            return new int[0];
-        }
-        int[] indices = new int[checkpoint.size()-1];
-        for (int i=1; i<checkpoint.size(); i++) {
-            indices[i-1] = checkpoint.get(i).index();
-        }
-        return indices;
     }
 
     public static Predicate<Found> ALL = found->true;

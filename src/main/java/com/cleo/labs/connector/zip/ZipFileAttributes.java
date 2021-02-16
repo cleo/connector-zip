@@ -7,19 +7,15 @@ import java.nio.file.attribute.FileTime;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
-import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
-
 /**
  * Zip file attribute views
  */
 public class ZipFileAttributes implements DosFileAttributes, DosFileAttributeView {
     private String zipFileName;
-    private Partition partition;
     private FileTime now = FileTime.from(new Date().getTime(), TimeUnit.MILLISECONDS);
 
-    public ZipFileAttributes(String zipFileName, Partition partition) throws IOException {
+    public ZipFileAttributes(String zipFileName) throws IOException {
         this.zipFileName = zipFileName;
-        this.partition = partition;
     }
 
     @Override
@@ -59,7 +55,7 @@ public class ZipFileAttributes implements DosFileAttributes, DosFileAttributeVie
 
     @Override
     public long size() {
-        return partition == null ? -1L : partition.size();
+        return -1L;
     }
 
     @Override

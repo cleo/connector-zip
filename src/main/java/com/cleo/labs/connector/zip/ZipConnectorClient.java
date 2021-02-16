@@ -13,6 +13,8 @@ import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.file.attribute.BasicFileAttributeView;
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +31,7 @@ import com.cleo.connector.api.command.ConnectorCommandResult.Status;
 import com.cleo.connector.api.command.DirCommand;
 import com.cleo.connector.api.command.GetCommand;
 import com.cleo.connector.api.command.PutCommand;
+import com.cleo.connector.api.directory.Directory.Type;
 import com.cleo.connector.api.directory.Entry;
 import com.cleo.connector.api.interfaces.IConnectorConfig;
 import com.cleo.connector.api.interfaces.IConnectorIncoming;
@@ -39,13 +42,10 @@ import com.cleo.labs.connector.zip.ZipConnectorSchema.UnzipMode;
 import com.cleo.labs.util.zip.Finder;
 import com.cleo.labs.util.zip.Found;
 import com.cleo.labs.util.zip.LocalFinderInputStream;
-import com.cleo.labs.util.zip.PartitionedZipDirectory;
-import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
 import com.cleo.labs.util.zip.PathUtil;
 import com.cleo.labs.util.zip.ThreadedZipDirectoryInputStream;
 import com.cleo.labs.util.zip.UnzipDirectoryStreamWrapper;
 import com.cleo.labs.util.zip.UnzipProcessor;
-import com.cleo.labs.util.zip.ZipDirectoryInputStream;
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.cleo.labs.util.zip.Found.Operation;
 import com.cleo.util.MacroUtil;
@@ -83,6 +83,8 @@ public class ZipConnectorClient extends ConnectorClient {
         return this;
     }
 
+    public static final String DIRECTORY_ZIP = "directory.zip";
+
     @Command(name=DIR)
     public ConnectorCommandResult dir(DirCommand dir) throws ConnectorException, IOException {
         String root = PathUtil.asDirectory(config.getRootPath());
@@ -96,17 +98,11 @@ public class ZipConnectorClient extends ConnectorClient {
         }
         factory.setSourceAndDest(source, null, MacroUtil.SOURCE_FILE, s -> logger.debug(s));
 
-        PartitionedZipDirectory zip = PartitionedZipDirectory.builder(factory.getFile(root+source))
-                .opener(f -> factory.getInputStream(f.file()))
-                .level(config.getCompressionLevel())
-                .filter(Finder.excluding(config.getExclusions()))
-                .directoryMode(config.getDirectoryMode())
-                .threshold(config.getZipSizeThreshold())
-                .build();
-        List<Partition> partitions = zip.partitions();
-        ZipFilenameEncoder encoder = new ZipFilenameEncoder(partitions);
-        List<Entry> dirList = encoder.getEntries(source);
-        return new ConnectorCommandResult(Status.Success, Optional.empty(), dirList);
+        Entry zipfile = new Entry(Type.file)
+                .setDate(LocalDateTime.now())
+                .setPath((source.isEmpty() ? "" : source+"/") + DIRECTORY_ZIP)
+                .setSize(-1L);
+        return new ConnectorCommandResult(Status.Success, Optional.empty(), Arrays.asList(zipfile));
     }
 
     public static final String DIRECTORY_LISTING = "directory.listing";
@@ -132,7 +128,6 @@ public class ZipConnectorClient extends ConnectorClient {
         factory.setSourceAndDest(get.getSource().getPath(), get.getDestination().getName(), MacroUtil.SOURCE_FILE, s -> logger.debug(s));
 
         File file = factory.getFile(root+sourceFile);
-        Partition partition;
 
         if (file.getName().equals(DIRECTORY_LISTING)) {
             try (LocalFinderInputStream in = LocalFinderInputStream.builder(factory.getFile(root+sourceDir))
@@ -140,22 +135,6 @@ public class ZipConnectorClient extends ConnectorClient {
                     .debug(s -> logger.debug(s))
                     .build()) {
                 transfer(in, destination.getStream(), true);
-                return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
-            } catch (IOException ioe) {
-                throw new ConnectorException(String.format("'%s' does not exist or is not accessible", sourceFile),
-                    ioe, ConnectorException.Category.fileNonExistentOrNoAccess);
-            }
-        } else if ((partition = ZipFilenameEncoder.parseFilename(file.getName())) != null) {
-            try (ZipDirectoryInputStream zip = ZipDirectoryInputStream.builder(factory.getFile(root+sourceDir))
-                    .opener(f -> factory.getInputStream(f.file()))
-                    .level(config.getCompressionLevel())
-                    .filter(Finder.excluding(config.getExclusions())
-                            .and(Finder.only(config.getSelect())))
-                    .directoryMode(config.getDirectoryMode())
-                    .restart(partition.checkpoint())
-                    .limit(partition.count())
-                    .build()) {
-                transfer(zip, destination.getStream(), true);
                 return new ConnectorCommandResult(ConnectorCommandResult.Status.Success);
             } catch (IOException ioe) {
                 throw new ConnectorException(String.format("'%s' does not exist or is not accessible", sourceFile),
@@ -470,15 +449,10 @@ public class ZipConnectorClient extends ConnectorClient {
 
         factory.setSourceAndDest(path, null, MacroUtil.SOURCE_FILE, s -> logger.debug(s));
         File file = factory.getFile(root+sourceFile);
-        Partition partition = ZipFilenameEncoder.parseFilename(file.getName());
 
-        if (partition != null) {
-            return new ZipFileAttributes(file.getName(), partition);
-        } else {
-            File dir = factory.getFile(root+sourceDir);
-            if (dir.exists() && dir.isDirectory()) {
-                return new ZipFileAttributes(file.getName(), null);
-            }
+        File dir = factory.getFile(root+sourceDir);
+        if (dir.exists() && dir.isDirectory()) {
+            return new ZipFileAttributes(file.getName());
         }
         throw new ConnectorException(String.format("'%s' does not exist or is not accessible", path),
                 ConnectorException.Category.fileNonExistentOrNoAccess);

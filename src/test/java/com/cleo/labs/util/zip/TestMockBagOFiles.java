@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PushbackInputStream;
 import java.util.Arrays;
-import java.util.List;
 import java.util.zip.ZipInputStream;
 
 import org.junit.Ignore;
@@ -17,14 +16,12 @@ import org.junit.Test;
 
 import com.cleo.labs.util.zip.Finder.DirectoryMode;
 import com.cleo.labs.util.zip.MockBagOFiles.DirectoryVerifier;
-import com.cleo.labs.util.zip.PartitionedZipDirectory.Partition;
 import com.google.common.io.ByteStreams;
 
 public class TestMockBagOFiles {
 
     @Test
     public void testMock() throws IOException {
-        long size = 0;
         MockBagOFiles root = new MockBagOFiles()
                 .dirs("d%d", 1, 3)
                 .dirs("e%d", 1, 3)
@@ -48,20 +45,11 @@ public class TestMockBagOFiles {
                  });
             assertNotNull(zip);
             assertNotNull(unzip);
-            size = ByteStreams.copy(zip, unzip);
+            ByteStreams.copy(zip, unzip);
             zip.close();
             unzip.close();
             assertTrue(verifier.verified());
         }
-        PartitionedZipDirectory zip = PartitionedZipDirectory.builder(root.root())
-                .opener(root.opener())
-                .filter(Finder.excluding("glob:.git/**","glob:**/*.class"))
-                .threshold(0)
-                .directoryMode(DirectoryMode.exclude)
-                .build();
-        List<Partition> partitions = zip.partitions();
-        assertEquals(1, partitions.size());
-        assertEquals(size, partitions.get(0).size());
     }
 
     @Ignore

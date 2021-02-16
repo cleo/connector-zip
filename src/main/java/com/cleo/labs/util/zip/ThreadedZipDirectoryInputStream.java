@@ -84,7 +84,6 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
 
     private void setup() throws IOException {
         // start the pump from the finder to the foundQueue
-        finder.unhold();
         this.closed = false;
         this.foundQueue = new ArrayBlockingQueue<>(foundQueueCapacity);
         this.finderThread = new Thread(runFinderThread, "finderThread");
@@ -116,7 +115,6 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
         private Finder finder = null;
         private Predicate<Found> filter = Finder.ALL;
         private DirectoryMode directoryMode = DirectoryMode.include;
-        private int[] restart = null;
         private int limit = 0;
         private InputStream remoteReplica = null;
         private long timeout = 0;
@@ -149,10 +147,6 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
             this.directoryMode = directoryMode;
             return this;
         }
-        public Builder restart(int[] restart) {
-            this.restart = restart;
-            return this;
-        }
         public Builder limit(int limit) {
             this.limit = limit;
             return this;
@@ -182,9 +176,6 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
                     .directoryMode(directoryMode)
                     .limit(limit)
                     .debug(debug);
-            if (restart != null && restart.length>0) {
-                finder.restart(restart);
-            }
             if (remoteReplica != null) {
                 finder.remoteReplica(remoteReplica);
             }
@@ -206,17 +197,8 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
         return new Builder(path);
     }
 
-    public ThreadedZipDirectoryInputStream hold() {
-        finder.hold();
-        return this;
-    }
-
     public int count() {
         return finder.count();
-    }
-
-    public int[] checkpoint() {
-        return finder.checkpoint();
     }
 
     public Finder finder() {

@@ -57,24 +57,6 @@ public class TestFinder {
     }
 
     @Test
-    public void testRestart() throws IOException {
-        MockBagOFiles root = bagOf100();
-        int limit = 17;
-        Finder files = new Finder(root.root())
-                .filter(Finder.excluding("glob:.*", "glob:target"))
-                .directoryMode(DirectoryMode.excludeEmpty);
-        for (int i=0; i<limit; i++) {
-            files.next();
-        }
-        files.hold();
-        Finder restart = new Finder(root.root())
-                .restart(files.checkpoint())
-                .filter(Finder.excluding("glob:.*", "glob:target"))
-                .directoryMode(DirectoryMode.excludeEmpty);
-        assertEquals(1+102-limit, Iterables.size(restart)); // 1+ for the extra /
-    }
-
-    @Test
     public void testDirectories() throws IOException {
         MockBagOFiles root = bagOf100();
         int limit = 0;
