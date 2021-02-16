@@ -51,7 +51,6 @@ import com.cleo.labs.util.zip.Found.Operation;
 import com.cleo.util.MacroUtil;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
-import com.google.common.io.ByteStreams;
 
 public class ZipConnectorClient extends ConnectorClient {
     private ZipConnectorConfig config;
@@ -189,8 +188,14 @@ public class ZipConnectorClient extends ConnectorClient {
         private UnzipProcessor logProcessor = null;
         private ExecutorService pool = Executors.newCachedThreadPool();
         private IOException exception = null;
+        private boolean unzipRootFilesLast = false;
+        private boolean suppressDirectoryCreation = false;
+        private boolean replicateDeletes = false;
         public Unzipper(String root) {
             this.root = root;
+            this.unzipRootFilesLast = config.unzipRootFilesLast();
+            this.suppressDirectoryCreation = config.getSuppressDirectoryCreation();
+            this.replicateDeletes = config.getReplicateDeletes();
             if (config.getUnzipMode()==UnzipMode.unzipAndLog) {
                 logProcessor = getUnzipLogger();
             }
@@ -223,11 +228,11 @@ public class ZipConnectorClient extends ConnectorClient {
                             logProcessor.process(zip);
                         }
                         if (zip.operation()==Operation.add) { 
-                            if (!config.getSuppressDirectoryCreation()) {
+                            if (!suppressDirectoryCreation) {
                                 zip.file().mkdirs();
                             }
                         } else if (zip.operation()==Operation.delete) {
-                            if (config.getReplicateDeletes() && !rmdirs(zip.file())) {
+                            if (replicateDeletes && !rmdirs(zip.file())) {
                                 logger.logError("unable to delete directory "+zip.fullname());
                             }
                         }
@@ -246,10 +251,10 @@ public class ZipConnectorClient extends ConnectorClient {
                             logProcessor.process(zip);
                         }
                         if (zip.operation()==Operation.add) {
-                            if (config.unzipRootFilesLast() && zip.path().length == 1) {
+                            if (unzipRootFilesLast && zip.path().length == 1) {
                                 file = factory.getOutputStream(saveForLast(zip.file()), zip.modified());
                             } else {
-                                if (!config.getSuppressDirectoryCreation()) {
+                                if (!suppressDirectoryCreation) {
                                     File parent = zip.file().getParentFile();
                                     if (!parent.exists()) {
                                         parent.mkdirs();
@@ -259,9 +264,15 @@ public class ZipConnectorClient extends ConnectorClient {
                                 }
                                 file = factory.getOutputStream(zip.file(), zip.modified());
                             }
-                            ByteStreams.copy(in, file);
+                            byte[] buffer = new byte[ThreadedZipDirectoryInputStream.DEFAULT_BUFFERSIZE];
+                            int n;
+                            while ((n = in.read(buffer)) >= 0) {
+                                if (n > 0) {
+                                    file.write(buffer, 0, n);
+                                }
+                            }
                         } else if (zip.operation()==Operation.delete) {
-                            if (config.getReplicateDeletes() && !zip.file().delete()) {
+                            if (replicateDeletes && !zip.file().delete()) {
                                 logger.logError("unable to delete file "+zip.fullname());
                             }
                         }
@@ -339,23 +350,27 @@ public class ZipConnectorClient extends ConnectorClient {
     }
 
     private UnzipProcessor getUnzipLogger() {
-        return zip -> {
-            if (zip.directory()) {
-                if (zip.operation()==Operation.add) { 
-                    if (!config.getSuppressDirectoryCreation()) {
-                        logger.logDetail("mkdir "+zip.fullname(), 1);
+        return new UnzipProcessor() {
+            private boolean suppressDirectoryCreation = config.getSuppressDirectoryCreation();
+            @Override
+            public OutputStream process(Found zip) throws IOException {
+                if (zip.directory()) {
+                    if (zip.operation()==Operation.add) {
+                        if (!suppressDirectoryCreation) {
+                            logger.logDetail("mkdir "+zip.fullname(), 1);
+                        }
+                    } else if (zip.operation()==Operation.delete) {
+                        logger.logDetail("rmdir "+zip.fullname(), 1);
                     }
-                } else if (zip.operation()==Operation.delete) {
-                    logger.logDetail("rmdir "+zip.fullname(), 1);
+                } else {
+                    if (zip.operation()==Operation.add) {
+                        logger.logDetail("create "+zip.fullname(), 1);
+                    } else if (zip.operation()==Operation.delete) {
+                        logger.logDetail("delete "+zip.fullname(), 1);
+                    }
                 }
-            } else {
-                if (zip.operation()==Operation.add) { 
-                    logger.logDetail("create "+zip.fullname(), 1);
-                } else if (zip.operation()==Operation.delete) {
-                    logger.logDetail("delete "+zip.fullname(), 1);
-                }
+                return null;
             }
-            return null;
         };
     }
 
