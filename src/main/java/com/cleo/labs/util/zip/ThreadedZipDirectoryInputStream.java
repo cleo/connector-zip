@@ -79,16 +79,7 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
         } catch (InterruptedException e) {
             // done
         }
-        if (!closed) {
-            try {
-                zip.close();
-                zip = null;
-            } catch (IOException e) {
-                if (exception == null) {
-                    exception = e;
-                }
-            }
-        }
+        closeZip();
     };
 
     private void setup() throws IOException {
@@ -232,11 +223,7 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
         return finder;
     }
 
-    @Override
-    public void close() throws IOException {
-        closed = true;
-        // finderThread will end when closed is true
-        // zipThread will end when closed is true
+    private synchronized void closeZip() {
         if (zip != null) {
             try {
                 zip.close();
@@ -247,6 +234,14 @@ public class ThreadedZipDirectoryInputStream extends PipedInputStream {
                 }
             }
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        closed = true;
+        // finderThread will end when closed is true
+        // zipThread will end when closed is true
+        closeZip();
         if (finder != null) {
             finder.close();
             finder = null;
