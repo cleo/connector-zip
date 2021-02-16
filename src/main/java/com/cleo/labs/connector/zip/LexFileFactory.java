@@ -27,7 +27,6 @@ import com.cleo.lexicom.beans.NetworkFilterOutputStream;
 import com.cleo.versalex.connector.Action;
 import com.cleo.versalex.connector.Network;
 import com.google.common.base.Strings;
-import com.google.common.io.ByteStreams;
 
 public class LexFileFactory implements FileFactory {
     IConnectorHost host = null;
@@ -113,7 +112,13 @@ public class LexFileFactory implements FileFactory {
                 }
             } else {
                 InputStream is = getInputStream(lexfile);
-                ByteStreams.copy(is, to);
+                byte[] buffer = new byte[ThreadedZipDirectoryInputStream.DEFAULT_BUFFERSIZE];
+                int n;
+                while ((n = is.read(buffer)) >= 0) {
+                    if (n > 0) {
+                        to.write(buffer, 0, n);
+                    }
+                }
                 is.close();
                 to.flush();
             }
