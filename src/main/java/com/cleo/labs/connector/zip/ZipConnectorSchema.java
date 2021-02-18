@@ -89,14 +89,6 @@ public class ZipConnectorSchema extends ConnectorConfig {
             .setGroup(CommonPropertyGroups.ConnectAdvanced)
             .build();
 
-    @Property
-    final IConnectorProperty<String> zipSizeThreshold = new PropertyBuilder<>("ZipSizeThreshold", "")
-            .setAllowedInSetCommand(true)
-            .setDescription("Set to split large zip files into parts when the size threshold is crossed.")
-            .addPossibleRegexes("\\d+(?i:[kmgt]b?)?")
-            .setGroup(CommonPropertyGroups.ConnectAdvanced)
-            .build();
-
     public enum UnzipMode {
         unzip("unzip"), unzipAndLog("unzip and log"), log("log"), preflight("preflight");
         private String legend;

@@ -89,14 +89,6 @@ public class ZipConnectorConfig {
         return 0L;
     }
 
-    public long getZipSizeThreshold() {
-        try {
-            return parseLength(schema.zipSizeThreshold.getValue(client));
-        } catch (ConnectorPropertyException e) {
-            return 0L;
-        }
-    }
-
     private static String globByDefault(String pattern) {
         if (pattern==null || pattern.isEmpty()) {
             return null;
