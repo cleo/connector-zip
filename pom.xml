@@ -46,7 +46,7 @@
         <junit.version>4.13.1</junit.version>
         <cleo.version>5.6.0.0</cleo.version>
         <jackson.version>2.6.6</jackson.version>
-        <guava.version>26.0-jre</guava.version>
+        <guava.version>29.0-jre</guava.version>
         <commons-io.version>2.4</commons-io.version>
         <maven.assembly.plugin.version>3.1.0</maven.assembly.plugin.version>
     </properties>
