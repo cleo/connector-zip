@@ -84,6 +84,15 @@ Cloud storage infrastructures such as Amazon S3, Azure Blob Storage or Google Cl
 
 In many cases the zip archive represents a folder structure of files that, when unzipped, will be processed by an external system. When the files in subfolders are understood to be attachments to a larger transaction whose index files are in the top level of the archive, it is important that the subfolders be unzipped first and the top level files last. Select the _Unzip Root Files Last_ option to have top level files stored in a temporary subfolder of the target directory (it will be given a name based on a GUID like `.ee0eabd6-f3aa-491c-a30a-35b09b835f95`) until the zip file is completely unzipped, at which time the top level files will be moved from the temporary subfolder to the top level and the temporary folder will be removed.
 
+### Unzip and ZipSlip
+
+An implementation of unzip is vulnerable to the [ZipSlip](https://snyk.io/research/zip-slip-vulnerability) attack when it does not carefully process the paths encoded in the zip file to ensure files are not created outside the intended destination folder. The Zip Connector defends against this attack by editing the encoded paths by:
+
+* stripping any leading "root" prefix, including leading `/` or `\` characters and any prefix that looks like a drive letter like `x:`, and
+* stripping any embedded `.` or `..` path elements, whether using `/` or `\` as the path delimiter, from the path.
+
+The file is extracted to the resulting edited path, prefixed with the intended _Root Path_.
+
 ## Using Zip Connector Commands ##
 
 In addition to `GET` and `PUT`, the connector supports the `DIR` command, which allows `GET *` to work properly. The `DIR` command:
