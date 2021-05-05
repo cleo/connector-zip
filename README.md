@@ -95,16 +95,9 @@ The file is extracted to the resulting edited path, prefixed with the intended _
 
 ## Using Zip Connector Commands ##
 
-In addition to `GET` and `PUT`, the connector supports the `DIR` command, which allows `GET *` to work properly. The `DIR` command:
+In addition to `GET` and `PUT`, the connector supports the `DIR` command, which allows `GET *` to work properly. The `DIR` command returns a single entry with the name of the directory appended with `.zip` (or `directory.xip` if the directory name cannot be determined). The directory is marked as a plain file with unknown size (-1).
 
-* appends any path in the `DIR` command to the configured _Root Path_ and uses this as the target directory to be zipped,
-* zips (and discards) the entire target directory, measuring the number of files and total zipped size encountered, breaking the zip into chunks if a _Zip Size Threshold_ is configured,
-* constructs a set of encoded file names named `partn-code.zip`, where `n` is a number from `1` to the number of parts, and `code` is a sequence of characters encoding the size of the part, the number of zip entries it contains, and where in the target directory to start zipping,
-* returns the set of `partn-code.zip` file names as the contents of the target directory.
-
-Only file names matching the `partn-code.zip` format in a `GET` request will be processed&mdash;any other file name will be _not found_.
-
-When processing a command `PUT path/file`, the behavior is similar in that the `file` name is discarded, but the `path` is processed as a subfolder of the root path. If `path` does not exist, the `PUT` command will create it (and all subfolders based on the contents of the file being unzipped) as needed.
+When processing a command `PUT path/file`, the `file` name is discarded, but the `path` is processed as a subfolder of the root path. If `path` does not exist, the `PUT` command will create it (and all subfolders based on the contents of the file being unzipped) as needed.
 
 Note that the `PUT` command will fail if file or path names in the file being unzipped attempt to write outside the root folder, e.g. through the use of absolute pathnames or `..` prefixes.
 
